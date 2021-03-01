@@ -5,9 +5,39 @@ import queue
 import logging
 import argparse
 import threading
+import html.parser
 
 
-QUEUE_ACCESS_TIMEOUT = 0.5
+
+USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
+QUEUE_ACCESS_TIMEOUT = 1
+
+
+class HyperlinkSearcher(html.parser.HTMLParser):
+    """
+    HTML parser scanning for hyperlink targets only
+    """
+
+    def __init__(self, logger: logging.Logger):
+        super().__init__()
+        self.logger = logger
+        self.hyperlinks = []
+
+    def error(self, message):
+        self.logger.error(f"HTML parsing failed: {message}")
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.hyperlinks += list(map(
+                lambda x: x[1],
+                filter(
+                    lambda x: x[0] == "href",
+                    attrs
+                )
+            ))
+
+    def get(self) -> list:
+        return self.hyperlinks
 
 
 class Downloader:
