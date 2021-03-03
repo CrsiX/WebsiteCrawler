@@ -116,15 +116,32 @@ class Downloader:
         self.runners[key].join(timeout=timeout)
         return True
 
-    def _store(self, path: str, content: typing.Union[bytes, str]):
+    def _store(self, path: str, content: typing.Union[bytes, str], logger: logging.Logger):
         """
         Store the specified content at the location 'path' on disk
 
         :param path: original path on the remote side
         :param content: result of the request for that path
+        :param logger: logger for this particular job
         """
 
-        pass
+        if path.startswith("/"):
+            path = path[1:]
+        filename = os.path.join(self.target, path[1:])
+        if path.endswith("/"):
+            logger.warning(f"Path '{path}' ending with '/' (adding suffix 'index.html')")
+            filename = os.path.join(self.target, path, "index.html")
+
+        if isinstance(content, str):
+            mode = "w"
+        elif isinstance(content, bytes):
+            mode = "wb"
+        else:
+            logger.critical("content must be bytes or str")
+            raise TypeError("content must be bytes or str")
+
+        with open(filename, mode) as f:
+            f.write(content)
 
     def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
         """
@@ -148,7 +165,7 @@ class Downloader:
         searcher = HyperlinkSearcher(logger)
         searcher.feed(request.text)
 
-        self._store(urllib.parse.urlparse(url).path, request.content)
+        self._store(urllib.parse.urlparse(url).path, request.content, logger)
 
         # Ensure that no cross-site references are added
         result = []
