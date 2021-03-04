@@ -46,18 +46,27 @@ class Downloader:
     :param website: base URI of the website which should be downloaded
     :param target: target directory where to store downloaded files
     :param logger: logger used to keep track of various events
+    :param https_mode: whether to enforce or reject HTTPS connections
+        (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP)
     """
 
     def __init__(
             self,
             website: str,
             target: str,
-            logger: logging.Logger
+            logger: logging.Logger,
+            https_mode: int = 0
     ):
         self.website = website
         self.target = target
         self.logger = logger
+        self.https_mode = https_mode
         self.netloc = urllib.parse.urlparse(self.website).netloc
+
+        if https_mode not in (0, 1, 2):
+            logger.error(f"Unknown https mode detected: {https_mode}")
+            logger.warning("Set https mode to default value.")
+            self.https_mode = 0
 
         if not os.path.exists(target):
             os.makedirs(target, exist_ok=True)
@@ -116,21 +125,39 @@ class Downloader:
         self.runners[key].join(timeout=timeout)
         return True
 
-    def _store(self, path: str, content: typing.Union[bytes, str], logger: logging.Logger):
+    def _get_storage_path(
+            self,
+            path: typing.Union[str, urllib.parse.ParseResult],
+            logger: logging.Logger
+    ) -> str:
         """
-        Store the specified content at the location 'path' on disk
+        Return the local storage path in the file system, based on the URI path
 
-        :param path: original path on the remote side
+        :param path: path of the URI or a ParseResult from `urlparse`
+        :param logger: logger for this particular job
+        :return: path to a local file (which may not exist yet)
+        """
+
+        if isinstance(path, urllib.parse.ParseResult):
+            path = path.path
+        if path.startswith("/"):
+            path = path[1:]
+
+        filename = os.path.join(self.target, path)
+        if filename.endswith("/"):
+            logger.warning(f"Filename '{filename}' ending with '/' (adding suffix 'index.html')")
+            filename = os.path.join(filename, "index.html")
+        return filename
+
+    @staticmethod
+    def _store(filename: str, content: typing.Union[bytes, str], logger: logging.Logger):
+        """
+        Store the specified content at the location on disk, creating parent dirs
+
+        :param filename: filename which should be used to store the content
         :param content: result of the request for that path
         :param logger: logger for this particular job
         """
-
-        if path.startswith("/"):
-            path = path[1:]
-        filename = os.path.join(self.target, path[1:])
-        if path.endswith("/"):
-            logger.warning(f"Path '{path}' ending with '/' (adding suffix 'index.html')")
-            filename = os.path.join(self.target, path, "index.html")
 
         if isinstance(content, str):
             mode = "w"
@@ -140,8 +167,10 @@ class Downloader:
             logger.critical("content must be bytes or str")
             raise TypeError("content must be bytes or str")
 
+        logger.debug(f"Writing to '{filename}' ...")
+        os.makedirs(os.path.split(filename)[0], exist_ok=True)
         with open(filename, mode) as f:
-            f.write(content)
+            logger.debug(f"{f.write(content)} bytes written.")
 
     def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
         """
@@ -165,7 +194,8 @@ class Downloader:
         searcher = HyperlinkSearcher(logger)
         searcher.feed(request.text)
 
-        self._store(urllib.parse.urlparse(url).path, request.content, logger)
+        filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
+        self._store(filename, request.content, logger)
 
         # Ensure that no cross-site references are added
         result = []
@@ -220,7 +250,7 @@ def setup() -> argparse.ArgumentParser:
     """
 
     parser = argparse.ArgumentParser(
-        description="MateBot maintaining command-line interface"
+        description="WebsiteCrawler: a deep website cloning tool"
     )
 
     parser.add_argument(
@@ -239,6 +269,15 @@ def setup() -> argparse.ArgumentParser:
         help="print verbose information",
         dest="verbose",
         action="store_true"
+    )
+
+    parser.add_argument(
+        "--https",
+        help="https support mode (enforce or reject HTTPS connections)",
+        dest="https_mode",
+        metavar="mode",
+        type=int,
+        choices=[0, 1, 2]
     )
 
     parser.add_argument(
