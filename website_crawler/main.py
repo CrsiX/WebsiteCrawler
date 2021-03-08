@@ -15,22 +15,28 @@ USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
 QUEUE_ACCESS_TIMEOUT = 1
 
 
-class HyperlinkSearcher(html.parser.HTMLParser):
+class FurtherResourceSearcher(html.parser.HTMLParser):
     """
-    HTML parser scanning for hyperlink targets only
+    HTML parser scanning for further targets
     """
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: logging.Logger, hyperlinks: bool, css: bool, js: bool):
         super().__init__()
         self.logger = logger
-        self.hyperlinks = []
+        self.hyperlinks = hyperlinks
+        self.css = css
+        self.js = js
+        self.results = []
 
     def error(self, message):
         self.logger.error(f"HTML parsing failed: {message}")
 
     def handle_starttag(self, tag, attrs):
-        if tag == "a":
-            self.hyperlinks += list(map(
+        if tag == "link" and self.css:
+            pass
+
+        elif tag == "a" and self.hyperlinks:
+            self.results += list(map(
                 lambda x: x[1],
                 filter(
                     lambda x: x[0] == "href",
@@ -48,6 +54,12 @@ class Downloader:
     :param logger: logger used to keep track of various events
     :param https_mode: whether to enforce or reject HTTPS connections
         (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP)
+    :param base_ref: string for the `base` HTML tag (if it's None, the base ref
+        element won't be touched, no matter if it exists; if it's the empty string,
+        the base reference will be removed from the resulting markup)
+    :param load_hyperlinks: determine whether HTML files from `a` tags should be loaded
+    :param load_css: determine whether CSS files from `style` tags should be loaded
+    :param load_js: determine whether JavaScript files from `script` tags should be loaded
     """
 
     def __init__(
@@ -55,12 +67,22 @@ class Downloader:
             website: str,
             target: str,
             logger: logging.Logger,
-            https_mode: int = 0
+            https_mode: int = 0,
+            base_ref: typing.Optional[str] = None,
+            load_hyperlinks: bool = True,
+            load_css: bool = False,
+            load_js: bool = False
     ):
         self.website = website
         self.target = target
         self.logger = logger
+
         self.https_mode = https_mode
+        self.base_ref = base_ref
+        self.load_hyperlinks = load_hyperlinks
+        self.load_css = load_css
+        self.load_js = load_js
+
         self.netloc = urllib.parse.urlparse(self.website).netloc
 
         if https_mode not in (0, 1, 2):
@@ -191,7 +213,9 @@ class Downloader:
             return []
 
         self.downloads[url] = code
-        searcher = HyperlinkSearcher(logger)
+        searcher = FurtherResourceSearcher(
+            logger, self.load_hyperlinks, self.load_css, self.load_js
+        )
         searcher.feed(request.text)
 
         filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
@@ -199,7 +223,7 @@ class Downloader:
 
         # Ensure that no cross-site references are added
         result = []
-        for ref in searcher.hyperlinks:
+        for ref in searcher.results:
             if ref.startswith("#"):
                 continue
             new_reference = urllib.parse.urljoin(self.website, ref)
