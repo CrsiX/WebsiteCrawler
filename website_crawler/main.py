@@ -73,8 +73,9 @@ class Downloader:
     :param load_js: determine whether JavaScript files from `script` tags should be loaded
     :param load_image: determine whether image files from `img` tags should be loaded
     :param rewrite_references: determine whether references to other pages on the same
-        site should be rewritten (aka absolute links in `a` tags will now be relative
-        links that will probably work with your downloaded files)
+        site should be rewritten (e.g. absolute links in `a` tags will now be relative
+        links that will probably work with your downloaded files); this procedure
+        will be applied to all downloaded files if enabled (e.g. also CSS or JS files)
     :param prettify: switch to enable prettifying the resulting HTML file to improve
         the file's readability (but may also introduce whitespace errors)
     """
@@ -306,6 +307,53 @@ class Downloader:
 
         return []
 
+    @staticmethod
+    def _rewrite_hyperlink_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+        """
+        Rewrite all hyperlink targets to become relative paths (in-place)
+
+        :param soup: a BeautifulSoup object containing `a` child tags
+        :return: the same BeautifulSoup object but with edited children
+        """
+
+        return soup  # TODO
+
+    @staticmethod
+    def _rewrite_css_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+        """
+        Rewrite all external CSS targets to become relative paths (in-place)
+
+        :param soup: a BeautifulSoup object containing `link` child tags
+            for CSS stylesheets loaded from the same domain
+        :return: the same BeautifulSoup object but with edited children
+        """
+
+        return soup  # TODO
+
+    @staticmethod
+    def _rewrite_javascript_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+        """
+        Rewrite all external JS targets to become relative paths (in-place)
+
+        :param soup: a BeautifulSoup object containing `script` child tags
+            that have external dependencies instead of local JS code
+        :return: the same BeautifulSoup object but with edited children
+        """
+
+        return soup  # TODO
+
+    @staticmethod
+    def _rewrite_image_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+        """
+        Rewrite all external image targets to become relative paths (in-place)
+
+        :param soup: a BeautifulSoup object containing `img` child tags
+            that load their image data from another location (first or third party)
+        :return: the same BeautifulSoup object but with edited children
+        """
+
+        return soup  # TODO
+
     def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
         """
         Retrieve the content of the given URL, store it and extract more targets
@@ -330,12 +378,20 @@ class Downloader:
         targets = []
         if self.load_hyperlinks:
             targets += self._extract_hyperlinks(soup.find_all("a"))
+            if self.rewrite_references:
+                soup = self._rewrite_hyperlink_paths(soup)
         if self.load_css:
             targets += self._extract_styles(soup.find_all("link"))
+            if self.rewrite_references:
+                soup = self._rewrite_css_paths(soup)
         if self.load_js:
             targets += self._extract_external_scripts(soup.find_all("script"))
+            if self.rewrite_references:
+                soup = self._rewrite_javascript_paths(soup)
         if self.load_image:
             targets += self._extract_image_refs(soup.find_all("img"))
+            if self.rewrite_references:
+                soup = self._rewrite_image_paths(soup)
 
         filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
         self._store(filename, soup.prettify(), logger)
