@@ -181,7 +181,7 @@ class Downloader:
         """
 
         return all(map(
-            lambda k: self._runner_states[k] in (0, 1, 2, 5),
+            lambda k: self._runner_states[k] in (0, 1, 2),
             self._runner_states
         ))
 
