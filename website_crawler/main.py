@@ -389,13 +389,30 @@ def setup() -> argparse.ArgumentParser:
     :return: argument parser
     """
 
+    def location(arg: str) -> str:
+        """
+        Ensure that a given argument is a valid URL for the downloader
+
+        :param arg: argument as given by the user
+        :return: the same, unmodified string
+        :raises ValueError: in case the string seems to be invalid
+        """
+
+        parsed_value = urllib.parse.urlparse(arg)
+        if parsed_value.netloc == "" or parsed_value.scheme == "":
+            raise ValueError
+        if parsed_value.scheme not in ("http", "https"):
+            raise ValueError
+        return arg
+
     parser = argparse.ArgumentParser(
         description="WebsiteCrawler: a deep website cloning tool"
     )
 
     parser.add_argument(
         "website",
-        help="website root URL, typically the domain name"
+        help="website root URL, typically the domain name",
+        type=location
     )
 
     parser.add_argument(
