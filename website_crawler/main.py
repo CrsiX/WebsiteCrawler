@@ -174,6 +174,31 @@ class Downloader:
         self.runners[key].join(timeout=timeout)
         return True
 
+    def stop_all_runners(self) -> bool:
+        """
+        Join all runners
+
+        This is a blocking operation. Note that this might take an infinite
+        amount of time if the runner is not about to exit.
+
+        :return: success of the operation (whether all runners have exited)
+        """
+
+        for key in self.runners:
+            if self._runner_states[key] in (0, 1, 5):
+                self._runner_states[key] = 2
+                self.logger.debug(f"Set runner state of '{key}' -> 2")
+            elif self._runner_states[key] == 3:
+                self.logger.debug(f"Runner '{key}' seems to have already finished")
+            elif self._runner_states[key] == 4:
+                self.logger.debug(f"Runner '{key}' seems to have already crashed")
+
+        for key in self.runners:
+            self.runners[key].join()
+            self.logger.debug(f"Stopped runner '{key}'")
+
+        return True
+
     def is_running(self) -> bool:
         """
         Determine whether the workers are currently doing something
@@ -338,8 +363,8 @@ class Downloader:
                 current_job = self.queue.get(True, QUEUE_ACCESS_TIMEOUT)
                 self._runner_states[ident] = 1
             except queue.Empty:
-                logger.debug("Queue was empty.")
-                self._runner_states[ident] = 5
+                if self._runner_states[ident] < 2:
+                    self._runner_states[ident] = 5
                 continue
 
             # Avoid duplicates in the queue by reserving the downloads 'slot'
@@ -506,7 +531,7 @@ def main(namespace: argparse.Namespace):
 
     logging_setup = {
         "level": level,
-        "format": "{asctime}: [{levelname}] {name}: {message}",
+        "format": "{asctime} [{levelname}] {name}: {message}",
         "datefmt": "%d.%m.%Y %H:%M",
         "style": "{"
     }
@@ -522,6 +547,9 @@ def main(namespace: argparse.Namespace):
 
     while downloader.is_running():
         time.sleep(QUEUE_ACCESS_TIMEOUT)
+
+    downloader.stop_all_runners()
+    logger.info("Finished.")
 
     # TODO: post-processing to rewrite all references in all downloaded files
 
