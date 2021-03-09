@@ -313,7 +313,7 @@ class Downloader:
 
         # Ensure that no cross-site references are added
         result = []
-        for ref in targets:
+        for ref in set(targets):
             if ref.startswith("#"):
                 continue
             new_reference = urllib.parse.urljoin(self.website, ref)
