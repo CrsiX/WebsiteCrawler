@@ -32,17 +32,26 @@ class FurtherResourceSearcher(html.parser.HTMLParser):
         self.logger.error(f"HTML parsing failed: {message}")
 
     def handle_starttag(self, tag, attrs):
-        if tag == "link" and self.css:
-            pass
-
-        elif tag == "a" and self.hyperlinks:
-            self.results += list(map(
+        def _get_link(attr):
+            return list(map(
                 lambda x: x[1],
                 filter(
-                    lambda x: x[0] == "href",
+                    lambda x: x[0] == attr,
                     attrs
                 )
             ))
+
+        if tag == "link" and self.css and ("rel", "stylesheet") in attrs:
+            self.results += _get_link("href")
+
+        elif tag == "a" and self.hyperlinks:
+            self.results += _get_link("href")
+
+        elif tag == "script" and self.js and ("type", "text/javascript") in attrs:
+            self.results += _get_link("src")
+
+        elif tag == "script" and self.js:
+            self.logger.warning(f"Ignoring tag 'script' due to missing 'type' in {attrs}")
 
 
 class Downloader:
@@ -60,6 +69,10 @@ class Downloader:
     :param load_hyperlinks: determine whether HTML files from `a` tags should be loaded
     :param load_css: determine whether CSS files from `style` tags should be loaded
     :param load_js: determine whether JavaScript files from `script` tags should be loaded
+    :param load_image: determine whether image files from `img` tags should be loaded
+    :param rewrite_references: determine whether references to other pages on the same
+        site should be rewritten (aka absolute links in `a` tags will now be relative
+        links that will probably work with your downloaded files)
     """
 
     def __init__(
@@ -71,7 +84,9 @@ class Downloader:
             base_ref: typing.Optional[str] = None,
             load_hyperlinks: bool = True,
             load_css: bool = False,
-            load_js: bool = False
+            load_js: bool = False,
+            load_image: bool = False,
+            rewrite_references: bool = False
     ):
         self.website = website
         self.target = target
@@ -82,6 +97,15 @@ class Downloader:
         self.load_hyperlinks = load_hyperlinks
         self.load_css = load_css
         self.load_js = load_js
+        self.load_image = load_image
+        self.rewrite_references = rewrite_references
+
+        if self.base_ref is not None:
+            self.logger.warning("Feature not supported yet: base_ref")
+        if self.load_image:
+            self.logger.warning("Feature not supported yet: load_image")
+        if self.rewrite_references:
+            self.logger.warning("Feature not supported yet: rewrite_references")
 
         self.netloc = urllib.parse.urlparse(self.website).netloc
 
@@ -265,6 +289,30 @@ class Downloader:
 
         self._runner_states[ident] = 3
 
+    @classmethod
+    def from_namespace(cls, namespace: argparse.Namespace, logger: logging.Logger):
+        """
+        Construct a new Downloader instance from a Namespace object
+
+        :param namespace: a Namespace object filled with the required attributes
+        :param logger: base logger used to construct runners' loggers
+        :return: a fresh Downloader instance constructed from the given namespace
+        :raises AttributeError: in case a required namespace attribute is missing
+        """
+
+        return Downloader(
+            website=namespace.website,
+            target=namespace.target,
+            logger=logger,
+            https_mode=namespace.https_mode,
+            base_ref=namespace.base_ref,
+            load_hyperlinks=namespace.explore,
+            load_css=namespace.css_download,
+            load_js=namespace.javascript_download,
+            load_image=namespace.image_download,
+            rewrite_references=namespace.rewrite
+        )
+
 
 def setup() -> argparse.ArgumentParser:
     """
@@ -296,6 +344,21 @@ def setup() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--base",
+        help="set or remove the base tag (if existing)",
+        dest="base_ref",
+        metavar="ref",
+        default=None
+    )
+
+    parser.add_argument(
+        "--css",
+        help="specify download of CSS content",
+        dest="css_download",
+        action="store_true"
+    )
+
+    parser.add_argument(
         "--https",
         help="https support mode (enforce or reject HTTPS connections)",
         dest="https_mode",
@@ -305,10 +368,38 @@ def setup() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--image",
+        help="specify download of content in image tags",
+        dest="image_download",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--javascript",
+        help="specify download of JavaScript content",
+        dest="javascript_download",
+        action="store_true"
+    )
+
+    parser.add_argument(
         "--logfile",
         help="path to the logfile",
         dest="logfile",
         metavar="file"
+    )
+
+    parser.add_argument(
+        "--no-explore",
+        help="deny further exploration using a tags and references",
+        dest="explore",
+        action="store_false"
+    )
+
+    parser.add_argument(
+        "--rewrite",
+        help="switch to rewrite hyperlink references to other downloaded content",
+        dest="rewrite",
+        action="store_true"
     )
 
     parser.add_argument(
@@ -323,31 +414,28 @@ def setup() -> argparse.ArgumentParser:
     return parser
 
 
-def main(website: str, target: str, verbose: bool, logfile: str, threads: int):
-    if logfile:
+def main(namespace: argparse.Namespace):
+    level = logging.INFO
+    if "verbose" in namespace and namespace.verbose:
+        level = logging.DEBUG
+
+    if "logfile" not in namespace or not namespace.logfile:
         logging.basicConfig(
-            level=logging.INFO if not verbose else logging.DEBUG,
-            filename=logfile,
+            level=level,
             # format=""  # TODO
         )
     else:
         logging.basicConfig(
-            level=logging.INFO if not verbose else logging.DEBUG,
+            level=level,
+            filename=namespace.logfile,
             # format=""  # TODO
         )
 
     logger = logging.getLogger("crawler")
-    downloader = Downloader(website, target, logger)
-    for i in range(threads):
+    downloader = Downloader.from_namespace(namespace, logger)
+    for i in range(namespace.threads):
         downloader.start_runner(f"runner{i}")
 
 
 if __name__ == "__main__":
-    namespace = setup().parse_args()
-    main(
-        namespace.website,
-        namespace.target,
-        namespace.verbose,
-        namespace.logfile,
-        namespace.threads
-    )
+    main(setup().parse_args())
