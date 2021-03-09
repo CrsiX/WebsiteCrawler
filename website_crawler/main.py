@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import time
 import queue
 import typing
 import logging
@@ -131,6 +132,7 @@ class Downloader:
         # 2 -> the runner is doing something, but it was requested to quit
         # 3 -> the runner exited successfully
         # 4 -> the runner crashed due to an exception
+        # 5 -> the runner skipped an iteration due to an empty queue (running)
         self._runner_states = {}
 
         self.queue.put(website)
@@ -170,6 +172,18 @@ class Downloader:
         self._runner_states[key] = 2
         self.runners[key].join(timeout=timeout)
         return True
+
+    def is_running(self) -> bool:
+        """
+        Determine whether the workers are currently doing something
+
+        :return: whether at least one runner is working on something
+        """
+
+        return all(map(
+            lambda k: self._runner_states[k] in (0, 1, 2, 5),
+            self._runner_states
+        ))
 
     def _get_storage_path(
             self,
@@ -267,11 +281,13 @@ class Downloader:
         logger.debug(f"Starting running loop for {ident} ...")
         self._runner_states[ident] = 1
 
-        while self._runner_states[ident] < 2:
+        while self._runner_states[ident] < 2 or self._runner_states[ident] == 5:
             try:
                 current_job = self.queue.get(True, QUEUE_ACCESS_TIMEOUT)
+                self._runner_states[ident] = 1
             except queue.Empty:
                 logger.debug("Queue was empty.")
+                self._runner_states[ident] = 5
                 continue
 
             # Avoid duplicates in the queue by reserving the downloads 'slot'
@@ -435,6 +451,11 @@ def main(namespace: argparse.Namespace):
     downloader = Downloader.from_namespace(namespace, logger)
     for i in range(namespace.threads):
         downloader.start_runner(f"runner{i}")
+
+    while downloader.is_running():
+        time.sleep(QUEUE_ACCESS_TIMEOUT)
+
+    # TODO: post-processing to rewrite all references in all downloaded files
 
 
 if __name__ == "__main__":
