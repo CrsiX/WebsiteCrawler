@@ -75,6 +75,8 @@ class Downloader:
     :param rewrite_references: determine whether references to other pages on the same
         site should be rewritten (aka absolute links in `a` tags will now be relative
         links that will probably work with your downloaded files)
+    :param prettify: switch to enable prettifying the resulting HTML file to improve
+        the file's readability (but may also introduce whitespace errors)
     """
 
     def __init__(
@@ -88,7 +90,8 @@ class Downloader:
             load_css: bool = False,
             load_js: bool = False,
             load_image: bool = False,
-            rewrite_references: bool = False
+            rewrite_references: bool = False,
+            prettify: bool = False
     ):
         self.website = website
         self.target = target
@@ -101,6 +104,7 @@ class Downloader:
         self.load_js = load_js
         self.load_image = load_image
         self.rewrite_references = rewrite_references
+        self.prettify = prettify
 
         if self.base_ref is not None:
             self.logger.warning("Feature not supported yet: base_ref")
@@ -403,7 +407,8 @@ class Downloader:
             load_css=namespace.css_download,
             load_js=namespace.javascript_download,
             load_image=namespace.image_download,
-            rewrite_references=namespace.rewrite
+            rewrite_references=namespace.rewrite,
+            prettify=namespace.prettify
         )
 
 
@@ -503,6 +508,13 @@ def setup() -> argparse.ArgumentParser:
         help="deny further exploration using a tags and references",
         dest="explore",
         action="store_false"
+    )
+
+    parser.add_argument(
+        "--prettify",
+        help="prettify resulting HTML files to improve readability",
+        dest="prettify",
+        action="store_true"
     )
 
     parser.add_argument(
