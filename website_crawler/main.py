@@ -504,17 +504,16 @@ def main(namespace: argparse.Namespace):
     if "verbose" in namespace and namespace.verbose:
         level = logging.DEBUG
 
-    if "logfile" not in namespace or not namespace.logfile:
-        logging.basicConfig(
-            level=level,
-            # format=""  # TODO
-        )
-    else:
-        logging.basicConfig(
-            level=level,
-            filename=namespace.logfile,
-            # format=""  # TODO
-        )
+    logging_setup = {
+        "level": level,
+        "format": "{asctime}: [{levelname}] {name}: {message}",
+        "datefmt": "%d.%m.%Y %H:%M",
+        "style": "{"
+    }
+
+    if "logfile" in namespace and namespace.logfile:
+        logging_setup["filename"] = namespace.logfile
+    logging.basicConfig(**logging_setup)
 
     logger = logging.getLogger("crawler")
     downloader = Downloader.from_namespace(namespace, logger)
