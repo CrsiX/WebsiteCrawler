@@ -321,7 +321,7 @@ class Downloader:
             return []
 
         self.downloads[url] = code
-        soup = bs4.BeautifulSoup(request.text)
+        soup = bs4.BeautifulSoup(request.text, features="html.parser")
 
         targets = []
         if self.load_hyperlinks:
