@@ -10,6 +10,7 @@ import threading
 import html.parser
 import urllib.parse
 
+import bs4
 import requests
 
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
@@ -232,6 +233,50 @@ class Downloader:
         with open(filename, mode) as f:
             logger.debug(f"{f.write(content)} bytes written.")
 
+    @staticmethod
+    def _extract_hyperlinks(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+        """
+        Extract the URLs of all hyperlink references from a list of `a` tags
+
+        :param tags: iterable of `a` tags (e.g. as returned by find_all)
+        :return: list of URLs
+        """
+
+        return []
+
+    @staticmethod
+    def _extract_styles(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+        """
+        Extract the URLs of all external linked stylesheets
+
+        :param tags: iterable of `link` tags (e.g. as returned by find_all)
+        :return: list of URLs
+        """
+
+        return []
+
+    @staticmethod
+    def _extract_external_scripts(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+        """
+        Extract the URLs of all external linked JavaScript files
+
+        :param tags: iterable of `script` tags (e.g. as returned by find_all)
+        :return: list of URLs
+        """
+
+        return []
+
+    @staticmethod
+    def _extract_image_refs(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+        """
+        Extract the URLs of all images
+
+        :param tags: iterable of `img` tags (e.g. as returned by find_all)
+        :return: list of URLs
+        """
+
+        return []
+
     def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
         """
         Retrieve the content of the given URL, store it and extract more targets
@@ -251,17 +296,24 @@ class Downloader:
             return []
 
         self.downloads[url] = code
-        searcher = FurtherResourceSearcher(
-            logger, self.load_hyperlinks, self.load_css, self.load_js
-        )
-        searcher.feed(request.text)
+        soup = bs4.BeautifulSoup(request.text)
+
+        targets = []
+        if self.load_hyperlinks:
+            targets += self._extract_hyperlinks(soup.find_all("a"))
+        if self.load_css:
+            targets += self._extract_styles(soup.find_all("link"))
+        if self.load_js:
+            targets += self._extract_external_scripts(soup.find_all("script"))
+        if self.load_image:
+            targets += self._extract_image_refs(soup.find_all("img"))
 
         filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
-        self._store(filename, request.content, logger)
+        self._store(filename, soup.prettify(), logger)
 
         # Ensure that no cross-site references are added
         result = []
-        for ref in searcher.results:
+        for ref in targets:
             if ref.startswith("#"):
                 continue
             new_reference = urllib.parse.urljoin(self.website, ref)
