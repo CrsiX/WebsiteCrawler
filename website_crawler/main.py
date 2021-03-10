@@ -76,6 +76,7 @@ class Downloader:
         site should be rewritten (e.g. absolute links in `a` tags will now be relative
         links that will probably work with your downloaded files); this procedure
         will be applied to all downloaded files if enabled (e.g. also CSS or JS files)
+    :param third_party: determine whether resources from third parties should be loaded too
     :param prettify: switch to enable prettifying the resulting HTML file to improve
         the file's readability (but may also introduce whitespace errors)
     """
@@ -92,6 +93,7 @@ class Downloader:
             load_js: bool = False,
             load_image: bool = False,
             rewrite_references: bool = False,
+            third_party: bool = False,
             prettify: bool = False
     ):
         self.website = website
@@ -105,6 +107,7 @@ class Downloader:
         self.load_js = load_js
         self.load_image = load_image
         self.rewrite_references = rewrite_references
+        self.third_party = third_party
         self.prettify = prettify
 
         if self.base_ref is not None:
@@ -367,7 +370,7 @@ class Downloader:
         request = requests.get(url, headers={"User-Agent": USER_AGENT_STRING})
         code = request.status_code
 
-        if not code == 200:
+        if code != 200:
             logger.error(f"Received code {code} for {url}. Skipping.")
             self.downloads[url] = code
             return []
@@ -464,6 +467,7 @@ class Downloader:
             load_js=namespace.javascript_download,
             load_image=namespace.image_download,
             rewrite_references=namespace.rewrite,
+            third_party=namespace.third_party,
             prettify=namespace.prettify
         )
 
@@ -577,6 +581,13 @@ def setup() -> argparse.ArgumentParser:
         "--rewrite",
         help="switch to rewrite hyperlink references to other downloaded content",
         dest="rewrite",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--third-party",
+        help="switch to enable download of third party resources (CSS, JS, images)",
+        dest="third_party",
         action="store_true"
     )
 
