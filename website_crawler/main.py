@@ -118,6 +118,8 @@ class Downloader:
             self.logger.warning("Feature not supported yet: rewrite_references")
 
         self.netloc = urllib.parse.urlparse(self.website).netloc
+        if self.netloc == "":
+            self.logger.error("Empty net location! Further operation might fail.")
 
         if https_mode not in (0, 1, 2):
             logger.error(f"Unknown https mode detected: {https_mode}")
@@ -214,7 +216,7 @@ class Downloader:
         :return: whether at least one runner is working on something
         """
 
-        return all(map(
+        return any(map(
             lambda k: self._runner_states[k] in (0, 1, 2),
             self._runner_states
         ))
