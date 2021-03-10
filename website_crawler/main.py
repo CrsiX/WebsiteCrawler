@@ -266,96 +266,65 @@ class Downloader:
         with open(filename, mode) as f:
             logger.debug(f"{f.write(content)} bytes written.")
 
-    @staticmethod
-    def _extract_hyperlinks(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+    def _handle_hyperlinks(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
         """
-        Extract the URLs of all hyperlink references from a list of `a` tags
+        Handle all `a` tags occurring in the file (represented as soup)
 
-        :param tags: iterable of `a` tags (e.g. as returned by find_all)
-        :return: list of URLs
-        """
+        This method extracts the URLs of all hyperlink references of `a` tags
+        and returns them as target list if it matches the criteria. If rewriting
+        of references had been enabled, this step will also be done in this method.
 
-        return []
-
-    @staticmethod
-    def _extract_styles(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
-        """
-        Extract the URLs of all external linked stylesheets
-
-        :param tags: iterable of `link` tags (e.g. as returned by find_all)
-        :return: list of URLs
+        :param soup: BeautifulSoup object containing the whole web page to be analyzed
+        :return: tuple of the same BeautifulSoup object and the list of URLs
+            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return []
+        return soup, []
 
-    @staticmethod
-    def _extract_external_scripts(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
+    def _handle_links(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
         """
-        Extract the URLs of all external linked JavaScript files
+        Handle all `link` tags occurring in the file (represented as soup)
 
-        :param tags: iterable of `script` tags (e.g. as returned by find_all)
-        :return: list of URLs
-        """
+        This method extracts the URLs of all external resources mentioned in `link` tags
+        and returns them as target list if it matches the criteria. If rewriting
+        of references had been enabled, this step will also be done in this method.
 
-        return []
-
-    @staticmethod
-    def _extract_image_refs(tags: typing.List[bs4.element.Tag]) -> typing.List[str]:
-        """
-        Extract the URLs of all images
-
-        :param tags: iterable of `img` tags (e.g. as returned by find_all)
-        :return: list of URLs
+        :param soup: BeautifulSoup object containing the whole web page to be analyzed
+        :return: tuple of the same BeautifulSoup object and the list of URLs
+            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return []
+        return soup, []
 
-    @staticmethod
-    def _rewrite_hyperlink_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+    def _handle_scripts(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
         """
-        Rewrite all hyperlink targets to become relative paths (in-place)
+        Handle all `script` tags occurring in the file (represented as soup)
 
-        :param soup: a BeautifulSoup object containing `a` child tags
-        :return: the same BeautifulSoup object but with edited children
-        """
+        This method extracts the URLs of all external scripts mentioned in `script` tags
+        and returns them as target list if it matches the criteria. If rewriting
+        of references had been enabled, this step will also be done in this method.
 
-        return soup  # TODO
-
-    @staticmethod
-    def _rewrite_css_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
-        """
-        Rewrite all external CSS targets to become relative paths (in-place)
-
-        :param soup: a BeautifulSoup object containing `link` child tags
-            for CSS stylesheets loaded from the same domain
-        :return: the same BeautifulSoup object but with edited children
+        :param soup: BeautifulSoup object containing the whole web page to be analyzed
+        :return: tuple of the same BeautifulSoup object and the list of URLs
+            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup  # TODO
+        return soup, []
 
-    @staticmethod
-    def _rewrite_javascript_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
+    def _handle_images(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
         """
-        Rewrite all external JS targets to become relative paths (in-place)
+        Handle all `img` tags occurring in the file (represented as soup)
 
-        :param soup: a BeautifulSoup object containing `script` child tags
-            that have external dependencies instead of local JS code
-        :return: the same BeautifulSoup object but with edited children
-        """
+        This method extracts the URLs of all external image paths mentioned in `img` tags
+        and returns them as target list if it matches the criteria. If rewriting
+        of references had been enabled, this step will also be done in this method.
 
-        return soup  # TODO
-
-    @staticmethod
-    def _rewrite_image_paths(soup: bs4.BeautifulSoup) -> bs4.BeautifulSoup:
-        """
-        Rewrite all external image targets to become relative paths (in-place)
-
-        :param soup: a BeautifulSoup object containing `img` child tags
-            that load their image data from another location (first or third party)
-        :return: the same BeautifulSoup object but with edited children
+        :param soup: BeautifulSoup object containing the whole web page to be analyzed
+        :return: tuple of the same BeautifulSoup object and the list of URLs
+            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup  # TODO
+        return soup, []
 
     def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
         """
@@ -380,21 +349,17 @@ class Downloader:
 
         targets = []
         if self.load_hyperlinks:
-            targets += self._extract_hyperlinks(soup.find_all("a"))
-            if self.rewrite_references:
-                soup = self._rewrite_hyperlink_paths(soup)
+            soup, t = self._handle_hyperlinks(soup)
+            targets.append(t)
         if self.load_css:
-            targets += self._extract_styles(soup.find_all("link"))
-            if self.rewrite_references:
-                soup = self._rewrite_css_paths(soup)
+            soup, t = self._handle_links(soup)
+            targets.append(t)
         if self.load_js:
-            targets += self._extract_external_scripts(soup.find_all("script"))
-            if self.rewrite_references:
-                soup = self._rewrite_javascript_paths(soup)
+            soup, t = self._handle_scripts(soup)
+            targets.append(t)
         if self.load_image:
-            targets += self._extract_image_refs(soup.find_all("img"))
-            if self.rewrite_references:
-                soup = self._rewrite_image_paths(soup)
+            soup, t = self._handle_images(soup)
+            targets.append(t)
 
         filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
         self._store(filename, soup.prettify(), logger)
