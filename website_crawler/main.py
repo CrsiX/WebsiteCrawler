@@ -76,6 +76,9 @@ class Downloader:
         site should be rewritten (e.g. absolute links in `a` tags will now be relative
         links that will probably work with your downloaded files); this procedure
         will be applied to all downloaded files if enabled (e.g. also CSS or JS files)
+    :param lowered: determine whether all paths and all references should be converted
+        to lowercase characters, fixing errors of file systems not ignoring uppercase
+        (this will only be used when `rewrite_references` is also set to True)
     :param third_party: determine whether resources from third parties should be loaded too
     :param prettify: switch to enable prettifying the resulting HTML file to improve
         the file's readability (but may also introduce whitespace errors)
@@ -93,6 +96,7 @@ class Downloader:
             load_js: bool = False,
             load_image: bool = False,
             rewrite_references: bool = False,
+            lowered: bool = False,
             third_party: bool = False,
             prettify: bool = False
     ):
@@ -107,6 +111,7 @@ class Downloader:
         self.load_js = load_js
         self.load_image = load_image
         self.rewrite_references = rewrite_references
+        self.lowered = lowered
         self.third_party = third_party
         self.prettify = prettify
 
@@ -116,6 +121,11 @@ class Downloader:
             self.logger.warning("Feature not supported yet: load_image")
         if self.rewrite_references:
             self.logger.warning("Feature not supported yet: rewrite_references")
+        if not self.rewrite_references and self.lowered:
+            self.logger.info("Feature disabled: lowered")
+            self.lowered = False
+        if self.lowered:
+            self.logger.warning("Feature not supported yet: lowered")
 
         self.netloc = urllib.parse.urlparse(self.website).netloc
         if self.netloc == "":
@@ -571,6 +581,13 @@ def setup() -> argparse.ArgumentParser:
         help="path to the logfile",
         dest="logfile",
         metavar="file"
+    )
+
+    parser.add_argument(
+        "--lowered",
+        help="convert all path names to lowercase",
+        dest="lowered",
+        action="store_true"
     )
 
     parser.add_argument(
