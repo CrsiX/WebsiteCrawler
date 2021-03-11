@@ -7,7 +7,6 @@ import typing
 import logging
 import argparse
 import threading
-import html.parser
 import urllib.parse
 
 import bs4
@@ -15,45 +14,6 @@ import requests
 
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
 QUEUE_ACCESS_TIMEOUT = 1
-
-
-class FurtherResourceSearcher(html.parser.HTMLParser):
-    """
-    HTML parser scanning for further targets
-    """
-
-    def __init__(self, logger: logging.Logger, hyperlinks: bool, css: bool, js: bool):
-        super().__init__()
-        self.logger = logger
-        self.hyperlinks = hyperlinks
-        self.css = css
-        self.js = js
-        self.results = []
-
-    def error(self, message):
-        self.logger.error(f"HTML parsing failed: {message}")
-
-    def handle_starttag(self, tag, attrs):
-        def _get_link(attr):
-            return list(map(
-                lambda x: x[1],
-                filter(
-                    lambda x: x[0] == attr,
-                    attrs
-                )
-            ))
-
-        if tag == "link" and self.css and ("rel", "stylesheet") in attrs:
-            self.results += _get_link("href")
-
-        elif tag == "a" and self.hyperlinks:
-            self.results += _get_link("href")
-
-        elif tag == "script" and self.js and ("type", "text/javascript") in attrs:
-            self.results += _get_link("src")
-
-        elif tag == "script" and self.js:
-            self.logger.warning(f"Ignoring tag 'script' due to missing 'type' in {attrs}")
 
 
 class Downloader:
