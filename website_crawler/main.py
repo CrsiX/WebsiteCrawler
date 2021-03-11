@@ -24,7 +24,8 @@ class Downloader:
     :param target: target directory where to store downloaded files
     :param logger: logger used to keep track of various events
     :param https_mode: whether to enforce or reject HTTPS connections
-        (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP)
+        (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP;
+        note that web servers might forward HTTP to HTTPS by default using 301 responses)
     :param base_ref: string for the `base` HTML tag (if it's None, the base ref
         element won't be touched, no matter if it exists; if it's the empty string,
         the base reference will be removed from the resulting markup)
@@ -282,7 +283,7 @@ class DownloadWorker:
         """Reference to the Downloader object to access certain attributes (read-only)"""
 
         self.base: typing.Optional[str] = None
-        """URI as extracted from the `base` HTML tag, if available"""
+        """URI as extracted and modified from the `base` HTML tag, if available"""
         self.code: typing.Optional[int] = None
         """HTTP response code of the request"""
         self.html: typing.Optional[bool] = None
@@ -309,6 +310,54 @@ class DownloadWorker:
         """Information whether the content has been written to the desired filename"""
         self.finished: bool = False
         """Information whether the processing of the URL has been finished"""
+
+    def _get_target(self, target: str) -> typing.Optional[str]:
+        """
+        Transform the partly defined target string to a full URL
+
+        :param target: anything that seems to be an URI, relative or absolute
+        :return: a full URL that can be used to request further resources,
+            if possible and the target matched the criteria (otherwise None)
+        """
+
+        url = urllib.parse.urlparse(target)
+        scheme, netloc, path, params, query, fragment = url
+
+        # Unknown schemes are ignored (e.g. mailto:)
+        if scheme != "" and scheme.lower() not in ("http", "https"):
+            return
+        elif scheme == "" and self.downloader.https_mode == 0:
+            scheme = self.url.scheme
+        elif scheme == "" and self.downloader.https_mode == 1:
+            scheme = "https"
+        elif scheme == "" and self.downloader.https_mode == 2:
+            scheme = "http"
+
+        # Other network locations are ignored (so we don't traverse the whole web)
+        if netloc != "" and netloc.lower() != self.downloader.netloc.lower():
+            return
+        if netloc == "":
+            netloc = self.downloader.netloc
+
+        # Determine the new path
+        if path == "" and query != self.url.query:
+            path = self.url.path
+        elif self.base:
+            base = urllib.parse.urlparse(self.base)
+            if base.netloc != self.downloader.netloc:
+                self.logger.error(
+                    f"Probably broken `base` tag. Netloc '{base.netloc}' "
+                    f"differs from the current netloc '{self.downloader.netloc}."
+                )
+            elif base.path != "":
+                base_path = base.path
+                while not base_path.endswith("/") and len(base_path) > 0:
+                    base_path = base_path[:-1]
+                if base_path == "":
+                    base_path = "/"
+                path = base_path + path
+
+        return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
 
     def _handle_hyperlinks(self):
         """
@@ -393,7 +442,7 @@ class DownloadWorker:
         # Generate the 'soup' and extract the base reference, if possible
         if self.content_type.lower().startswith("text/html"):
             self.soup = bs4.BeautifulSoup(self.response.text, features="html.parser")
-            self.base = self.downloader.netloc
+            # self.base = self.downloader.netloc
             if self.soup.base is not None and self.soup.base.has_attr("href"):
                 self.base = self.soup.base.get("href")
                 if urllib.parse.urlparse(self.base).netloc == "":
