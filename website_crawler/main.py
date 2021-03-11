@@ -480,6 +480,7 @@ class DownloadWorker:
 
         # Don't overwrite existing files if requested
         if os.path.exists(self.filename) and not self.downloader.overwrite:
+            self.logger.info(f"File {self.filename} has not been written, it already exists.")
             self.written = False
             self.finished = True
             return
