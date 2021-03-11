@@ -331,8 +331,8 @@ class DownloadWorker:
         """HTTP response code of the request"""
         self.html: typing.Optional[bool] = None
         """Indicator whether the response was handled as HTML result"""
-        self.path: typing.Optional[str] = None
-        """Path in the local file system where the file is stored"""
+        self.filename: typing.Optional[str] = None
+        """Path in the local file system where the file is stored, may be relative"""
         self.references: typing.Set[str] = set()
         """Set of references (URLs) to other server resources found in the response"""
 
@@ -348,6 +348,8 @@ class DownloadWorker:
         """Information whether the processing of the URL has been finished"""
         self.content_type: typing.Optional[str] = None
         """Content type of the response, as determined by the HTTP header"""
+        self.final_content: typing.Union[bytes, str, None] = None
+        """Final version of the content as stored in the target file"""
 
     def _handle_hyperlinks(self):
         """
@@ -448,6 +450,43 @@ class DownloadWorker:
                 self._handle_scripts()
             if self.downloader.load_image:
                 self._handle_images()
+
+        # Determine the filename under which the content should be stored
+        path = urllib.parse.urlparse(self.url).path
+        if path.startswith("/"):
+            path = path[1:]
+        self.filename = os.path.join(self.downloader.target, path)
+        if self.filename.endswith("/"):
+            self.logger.warning(
+                f"Added suffix 'index.html' because "
+                f"'{self.filename}' ended with '/'!"
+            )
+            self.filename = os.path.join(self.filename, "index.html")
+
+        # Determine the final content, based on the specified flags
+        if self.downloader.prettify:
+            self.final_content = self.soup.prettify()
+        elif self.downloader.rewrite_references:
+            self.final_content = self.soup.decode()
+        else:
+            self.final_content = self.response.content
+
+        # Determine the file opening mode
+        if isinstance(self.final_content, str):
+            mode = "w"
+        elif isinstance(self.final_content, bytes):
+            mode = "wb"
+        else:
+            self.logger.critical("content must be bytes or str")
+            raise TypeError("content must be bytes or str")
+
+        # Finally store the result in the desired file
+        os.makedirs(os.path.split(self.filename)[0], exist_ok=True)
+        with open(self.filename, mode) as f:
+            self.logger.debug(
+                f"{f.write(self.final_content)} "
+                f"bytes written to {self.filename}."
+            )
 
         self.finished = True
 
