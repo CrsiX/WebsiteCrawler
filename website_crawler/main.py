@@ -42,6 +42,7 @@ class Downloader:
     :param third_party: determine whether resources from third parties should be loaded too
     :param prettify: switch to enable prettifying the resulting HTML file to improve
         the file's readability (but may also introduce whitespace errors)
+    :param overwrite: allow overwriting existing files (default: True)
     """
 
     def __init__(
@@ -58,7 +59,8 @@ class Downloader:
             rewrite_references: bool = False,
             lowered: bool = False,
             third_party: bool = False,
-            prettify: bool = False
+            prettify: bool = False,
+            overwrite: bool = True
     ):
         self.website = website
         self.target = target
@@ -74,6 +76,7 @@ class Downloader:
         self.lowered = lowered
         self.third_party = third_party
         self.prettify = prettify
+        self.overwrite = overwrite
 
         if self.base_ref is not None:
             self.logger.warning("Feature not supported yet: base_ref")
@@ -253,7 +256,8 @@ class Downloader:
             load_image=namespace.image_download,
             rewrite_references=namespace.rewrite,
             third_party=namespace.third_party,
-            prettify=namespace.prettify
+            prettify=namespace.prettify,
+            overwrite=namespace.overwrite
         )
 
 # ------------------------------------------------------------------------------
@@ -342,14 +346,17 @@ class DownloadWorker:
         """BeautifulSoup object containing the tree of the HTML response, if possible"""
         self.response: typing.Optional[requests.Response] = None
         """Response of the web server, answering the request for the URL"""
-        self.started: bool = False
-        """Information whether the processing of the URL has been started"""
-        self.finished: bool = False
-        """Information whether the processing of the URL has been finished"""
         self.content_type: typing.Optional[str] = None
         """Content type of the response, as determined by the HTTP header"""
         self.final_content: typing.Union[bytes, str, None] = None
         """Final version of the content as stored in the target file"""
+
+        self.started: bool = False
+        """Information whether the processing of the URL has been started"""
+        self.written: bool = False
+        """Information whether the content has been written to the desired filename"""
+        self.finished: bool = False
+        """Information whether the processing of the URL has been finished"""
 
     def _handle_hyperlinks(self):
         """
@@ -471,6 +478,12 @@ class DownloadWorker:
         else:
             self.final_content = self.response.content
 
+        # Don't overwrite existing files if requested
+        if os.path.exists(self.filename) and not self.downloader.overwrite:
+            self.written = False
+            self.finished = True
+            return
+
         # Determine the file opening mode
         if isinstance(self.final_content, str):
             mode = "w"
@@ -487,6 +500,7 @@ class DownloadWorker:
                 f"{f.write(self.final_content)} "
                 f"bytes written to {self.filename}."
             )
+            self.written = True
 
         self.finished = True
 
@@ -591,8 +605,15 @@ def setup() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--no-explore",
-        help="deny further exploration using a tags and references",
+        help="deny further exploration using `a` tags and references",
         dest="explore",
+        action="store_false"
+    )
+
+    parser.add_argument(
+        "--no-overwrite",
+        help="do not overwrite any existing files",
+        dest="overwrite",
         action="store_false"
     )
 
