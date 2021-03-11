@@ -260,57 +260,6 @@ class Downloader:
             overwrite=namespace.overwrite
         )
 
-# ------------------------------------------------------------------------------
-# SECTION THAT WILL BE REBUILD LATER
-# ------------------------------------------------------------------------------
-
-    def _get_storage_path(
-            self,
-            path: typing.Union[str, urllib.parse.ParseResult],
-            logger: logging.Logger
-    ) -> str:
-        """
-        Return the local storage path in the file system, based on the URI path
-
-        :param path: path of the URI or a ParseResult from `urlparse`
-        :param logger: logger for this particular job
-        :return: path to a local file (which may not exist yet)
-        """
-
-        if isinstance(path, urllib.parse.ParseResult):
-            path = path.path
-        if path.startswith("/"):
-            path = path[1:]
-
-        filename = os.path.join(self.target, path)
-        if filename.endswith("/"):
-            logger.warning(f"Filename '{filename}' ending with '/' (adding suffix 'index.html')")
-            filename = os.path.join(filename, "index.html")
-        return filename
-
-    @staticmethod
-    def _store(filename: str, content: typing.Union[bytes, str], logger: logging.Logger):
-        """
-        Store the specified content at the location on disk, creating parent dirs
-
-        :param filename: filename which should be used to store the content
-        :param content: result of the request for that path
-        :param logger: logger for this particular job
-        """
-
-        if isinstance(content, str):
-            mode = "w"
-        elif isinstance(content, bytes):
-            mode = "wb"
-        else:
-            logger.critical("content must be bytes or str")
-            raise TypeError("content must be bytes or str")
-
-        logger.debug(f"Writing to '{filename}' ...")
-        os.makedirs(os.path.split(filename)[0], exist_ok=True)
-        with open(filename, mode) as f:
-            logger.debug(f"{f.write(content)} bytes written.")
-
 
 class DownloadWorker:
     """
