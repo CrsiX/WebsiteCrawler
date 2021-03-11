@@ -388,7 +388,7 @@ class DownloadWorker:
             self.content_type = self.response.headers["Content-Type"]
 
         # Generate the 'soup' and extract the base reference, if possible
-        if self.content_type.lower() == "text/html":
+        if self.content_type.lower().startswith("text/html"):
             self.soup = bs4.BeautifulSoup(self.response.text, features="html.parser")
             self.base = self.downloader.netloc
             if self.soup.base is not None and self.soup.base.has_attr("href"):
@@ -420,9 +420,9 @@ class DownloadWorker:
             self.filename = os.path.join(self.filename, "index.html")
 
         # Determine the final content, based on the specified flags
-        if self.downloader.prettify:
+        if self.downloader.prettify and self.soup:
             self.final_content = self.soup.prettify()
-        elif self.downloader.rewrite_references:
+        elif self.downloader.rewrite_references and self.soup:
             self.final_content = self.soup.decode()
         else:
             self.final_content = self.response.content
