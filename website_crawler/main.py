@@ -265,13 +265,16 @@ class DownloadWorker:
     """
     Worker class performing the actual work of downloading, analyzing, storing, ...
 
-    :param url: string containing the URL that should be processed
+    :param url: string or parsed URL result containing the URL that should be processed
     :param logger: the logger which should be used
     :param downloader: a reference to the Downloader object to get more details
     """
 
-    def __init__(self, url: str, logger: logging.Logger, downloader: Downloader):
-        self.url: str = url
+    def __init__(self, url: typing.Union[str, urllib.parse.ParseResult], logger: logging.Logger, downloader: Downloader):
+        if isinstance(url, str):
+            url = urllib.parse.urlparse(url)
+
+        self.url: urllib.parse.ParseResult = url
         """URL that should be requested from the server, analyzed and stored"""
         self.logger: logging.Logger = logger
         """Logger which will be used for logging"""
@@ -408,9 +411,12 @@ class DownloadWorker:
                 self._handle_images()
 
         # Determine the filename under which the content should be stored
-        path = urllib.parse.urlparse(self.url).path
+        path = self.url.path
         if path.startswith("/"):
             path = path[1:]
+        if len(path) == "":
+            self.logger.warning("Empty path detected. Added 'index.html'!")
+            path = "index.html"
         self.filename = os.path.join(self.downloader.target, path)
         if self.filename.endswith("/"):
             self.logger.warning(
