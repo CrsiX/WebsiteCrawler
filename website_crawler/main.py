@@ -221,6 +221,75 @@ class Downloader:
             self._runner_states
         ))
 
+    def _run(self, ident: str):
+        """
+        Perform the actual work in a loop
+
+        :param ident: (hopefully) unique string for runner identification
+        """
+
+        logger = self.logger.getChild(ident)
+        logger.debug(f"Starting running loop for {ident} ...")
+        self._runner_states[ident] = 1
+
+        while self._runner_states[ident] < 2 or self._runner_states[ident] == 5:
+            try:
+                current_job = self.queue.get(True, QUEUE_ACCESS_TIMEOUT)
+                self._runner_states[ident] = 1
+            except queue.Empty:
+                if self._runner_states[ident] < 2:
+                    self._runner_states[ident] = 5
+                continue
+
+            # Avoid duplicates in the queue by reserving the downloads 'slot'
+            if current_job in self.downloads:
+                continue
+            self.downloads[current_job] = 0
+
+            try:
+                worker = DownloadWorker(current_job, logger, self)
+                worker.run()
+                for item in set(worker.references):
+                    if item not in self.downloads:
+                        self.queue.put(item)
+                self.downloads[current_job] = worker.code
+            except:
+                logger.error(f"Error during handling of '{current_job}'!", exc_info=True)
+                self._runner_states[ident] = 4
+                raise
+
+        self._runner_states[ident] = 3
+
+    @classmethod
+    def from_namespace(cls, namespace: argparse.Namespace, logger: logging.Logger):
+        """
+        Construct a new Downloader instance from a Namespace object
+
+        :param namespace: a Namespace object filled with the required attributes
+        :param logger: base logger used to construct runners' loggers
+        :return: a fresh Downloader instance constructed from the given namespace
+        :raises AttributeError: in case a required namespace attribute is missing
+        """
+
+        return Downloader(
+            website=namespace.website,
+            target=namespace.target,
+            logger=logger,
+            https_mode=namespace.https_mode,
+            base_ref=namespace.base_ref,
+            load_hyperlinks=namespace.explore,
+            load_css=namespace.css_download,
+            load_js=namespace.javascript_download,
+            load_image=namespace.image_download,
+            rewrite_references=namespace.rewrite,
+            third_party=namespace.third_party,
+            prettify=namespace.prettify
+        )
+
+# ------------------------------------------------------------------------------
+# SECTION THAT WILL BE REBUILD LATER
+# ------------------------------------------------------------------------------
+
     def _get_storage_path(
             self,
             path: typing.Union[str, urllib.parse.ParseResult],
@@ -268,175 +337,149 @@ class Downloader:
         with open(filename, mode) as f:
             logger.debug(f"{f.write(content)} bytes written.")
 
-    def _handle_hyperlinks(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
+
+class DownloadWorker:
+    """
+    Worker class performing the actual work of downloading, analyzing, storing, ...
+
+    :param url: string containing the URL that should be processed
+    :param logger: the logger which should be used
+    :param downloader: a reference to the Downloader object to get more details
+    """
+
+    def __init__(self, url: str, logger: logging.Logger, downloader: Downloader):
+        self.url: str = url
+        """URL that should be requested from the server, analyzed and stored"""
+        self.logger: logging.Logger = logger
+        """Logger which will be used for logging"""
+        self.downloader: Downloader = downloader
+        """Reference to the Downloader object to access certain attributes (read-only)"""
+
+        self.base: typing.Optional[str] = None
+        """URI as extracted from the `base` HTML tag, if available"""
+        self.code: typing.Optional[int] = None
+        """HTTP response code of the request"""
+        self.html: typing.Optional[bool] = None
+        """Indicator whether the response was handled as HTML result"""
+        self.path: typing.Optional[str] = None
+        """Path in the local file system where the file is stored"""
+        self.references: typing.Set[str] = set()
+        """Set of references (URLs) to other server resources found in the response"""
+
+        # All those attributes should be considered an implementation
+        # detail, despite being 'public' by convention
+        self.soup: typing.Optional[bs4.BeautifulSoup] = None
+        """BeautifulSoup object containing the tree of the HTML response, if possible"""
+        self.response: typing.Optional[requests.Response] = None
+        """Response of the web server, answering the request for the URL"""
+        self.started: bool = False
+        """Information whether the processing of the URL has been started"""
+        self.finished: bool = False
+        """Information whether the processing of the URL has been finished"""
+        self.content_type: typing.Optional[str] = None
+        """Content type of the response, as determined by the HTTP header"""
+
+    def _handle_hyperlinks(self):
         """
         Handle all `a` tags occurring in the file (represented as soup)
 
         This method extracts the URLs of all hyperlink references of `a` tags
-        and returns them as target list if it matches the criteria. If rewriting
+        and adds them to the set of references if it matches the criteria. If rewriting
         of references had been enabled, this step will also be done in this method.
-
-        :param soup: BeautifulSoup object containing the whole web page to be analyzed
-        :return: tuple of the same BeautifulSoup object and the list of URLs
-            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup, []
+        for tag in self.soup.find_all("a"):
+            if tag.has_attr("href"):
+                target = tag.get("href")
+                if target.startswith("#"):
+                    continue
 
-    def _handle_links(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
+                url = urllib.parse.urlparse(target)
+                if url.scheme != "" and url.scheme not in ("http", "https"):
+                    continue
+                if url.netloc != "" and url.netloc != self.downloader.netloc:
+                    continue
+
+                # TODO: respect the base value
+
+                self.references.add(target)
+
+    def _handle_links(self):
         """
         Handle all `link` tags occurring in the file (represented as soup)
 
         This method extracts the URLs of all external resources mentioned in `link` tags
-        and returns them as target list if it matches the criteria. If rewriting
+        and adds them to the set of references if it matches the criteria. If rewriting
         of references had been enabled, this step will also be done in this method.
-
-        :param soup: BeautifulSoup object containing the whole web page to be analyzed
-        :return: tuple of the same BeautifulSoup object and the list of URLs
-            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup, []
+        self.logger.debug("_handle_links is not implemented yet.")
 
-    def _handle_scripts(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
+    def _handle_scripts(self):
         """
         Handle all `script` tags occurring in the file (represented as soup)
 
-        This method extracts the URLs of all external scripts mentioned in `script` tags
-        and returns them as target list if it matches the criteria. If rewriting
+        This method extracts the URLs of all external resources mentioned in `script` tags
+        and adds them to the set of references if it matches the criteria. If rewriting
         of references had been enabled, this step will also be done in this method.
-
-        :param soup: BeautifulSoup object containing the whole web page to be analyzed
-        :return: tuple of the same BeautifulSoup object and the list of URLs
-            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup, []
+        self.logger.debug("_handle_scripts is not implemented yet.")
 
-    def _handle_images(self, soup: bs4.BeautifulSoup) -> typing.Tuple[bs4.BeautifulSoup, typing.List[str]]:
+    def _handle_images(self):
         """
         Handle all `img` tags occurring in the file (represented as soup)
 
-        This method extracts the URLs of all external image paths mentioned in `img` tags
-        and returns them as target list if it matches the criteria. If rewriting
+        This method extracts the URLs of all external resources mentioned in `img` tags
+        and adds them to the set of references if it matches the criteria. If rewriting
         of references had been enabled, this step will also be done in this method.
-
-        :param soup: BeautifulSoup object containing the whole web page to be analyzed
-        :return: tuple of the same BeautifulSoup object and the list of URLs
-            (the content or children of the BeautifulSoup object might be modified)
         """
 
-        return soup, []
+        self.logger.debug("_handle_images is not implemented yet.")
 
-    def _handle(self, url: str, logger: logging.Logger) -> typing.List[str]:
+    def run(self):
         """
-        Retrieve the content of the given URL, store it and extract more targets
-
-        :param url: target URL which should be downloaded and analysed
-        :param logger: logger for this particular job
-        :return: list of other, yet unknown URLs found in the content
+        Perform the actual work as a blocking process
         """
 
-        logger.debug(f"Currently processing: {url}")
-        request = requests.get(url, headers={"User-Agent": USER_AGENT_STRING})
-        code = request.status_code
+        # Restrict multiple (unintentional) calls to this method
+        if self.started or self.finished:
+            return
+        self.started = True
 
-        if code != 200:
-            logger.error(f"Received code {code} for {url}. Skipping.")
-            self.downloads[url] = code
-            return []
+        self.logger.debug(f"Currently processing: {self.url}")
+        self.response = requests.get(self.url, headers={"User-Agent": USER_AGENT_STRING})
+        self.code = self.response.status_code
 
-        self.downloads[url] = code
-        soup = bs4.BeautifulSoup(request.text, features="html.parser")
+        if self.code != 200:
+            self.logger.error(f"Received code {self.code} for {self.url}. Skipping.")
+            return
 
-        targets = []
-        if self.load_hyperlinks:
-            soup, t = self._handle_hyperlinks(soup)
-            targets.append(t)
-        if self.load_css:
-            soup, t = self._handle_links(soup)
-            targets.append(t)
-        if self.load_js:
-            soup, t = self._handle_scripts(soup)
-            targets.append(t)
-        if self.load_image:
-            soup, t = self._handle_images(soup)
-            targets.append(t)
+        # Determine the content type of the response to only analyze HTML responses
+        if "Content-Type" in self.response.headers:
+            self.content_type = self.response.headers["Content-Type"]
 
-        filename = self._get_storage_path(urllib.parse.urlparse(url), logger)
-        self._store(filename, soup.prettify(), logger)
+        # Generate the 'soup' and extract the base reference, if possible
+        if self.content_type.lower() == "text/html":
+            self.soup = bs4.BeautifulSoup(self.response.text, features="html.parser")
+            self.base = self.downloader.netloc
+            if self.soup.base is not None and self.soup.base.has_attr("href"):
+                self.base = self.soup.base.get("href")
+                if urllib.parse.urlparse(self.base).netloc == "":
+                    self.base = urllib.parse.urljoin(self.downloader.netloc, self.base)
+            self.logger.debug(f"Base: {self.base}")
 
-        # Ensure that no cross-site references are added
-        result = []
-        for ref in set(targets):
-            if ref.startswith("#"):
-                continue
-            new_reference = urllib.parse.urljoin(self.website, ref)
-            if urllib.parse.urlparse(new_reference).netloc == self.netloc:
-                result.append(new_reference)
+            # Handle the various types of references, if enabled
+            if self.downloader.load_hyperlinks:
+                self._handle_hyperlinks()
+            if self.downloader.load_css:
+                self._handle_links()
+            if self.downloader.load_js:
+                self._handle_scripts()
+            if self.downloader.load_image:
+                self._handle_images()
 
-        return result
-
-    def _run(self, ident: str):
-        """
-        Perform the actual work in a loop
-
-        :param ident: (hopefully) unique string for runner identification
-        """
-
-        logger = self.logger.getChild(ident)
-        logger.debug(f"Starting running loop for {ident} ...")
-        self._runner_states[ident] = 1
-
-        while self._runner_states[ident] < 2 or self._runner_states[ident] == 5:
-            try:
-                current_job = self.queue.get(True, QUEUE_ACCESS_TIMEOUT)
-                self._runner_states[ident] = 1
-            except queue.Empty:
-                if self._runner_states[ident] < 2:
-                    self._runner_states[ident] = 5
-                continue
-
-            # Avoid duplicates in the queue by reserving the downloads 'slot'
-            if current_job in self.downloads:
-                continue
-            self.downloads[current_job] = 0
-
-            try:
-                for item in self._handle(current_job, logger):
-                    self.queue.put(item)
-            except:
-                logger.error(f"Error during handling of '{current_job}'!", exc_info=True)
-                self._runner_states[ident] = 4
-                raise
-
-        self._runner_states[ident] = 3
-
-    @classmethod
-    def from_namespace(cls, namespace: argparse.Namespace, logger: logging.Logger):
-        """
-        Construct a new Downloader instance from a Namespace object
-
-        :param namespace: a Namespace object filled with the required attributes
-        :param logger: base logger used to construct runners' loggers
-        :return: a fresh Downloader instance constructed from the given namespace
-        :raises AttributeError: in case a required namespace attribute is missing
-        """
-
-        return Downloader(
-            website=namespace.website,
-            target=namespace.target,
-            logger=logger,
-            https_mode=namespace.https_mode,
-            base_ref=namespace.base_ref,
-            load_hyperlinks=namespace.explore,
-            load_css=namespace.css_download,
-            load_js=namespace.javascript_download,
-            load_image=namespace.image_download,
-            rewrite_references=namespace.rewrite,
-            third_party=namespace.third_party,
-            prettify=namespace.prettify
-        )
+        self.finished = True
 
 
 def setup() -> argparse.ArgumentParser:
@@ -596,8 +639,6 @@ def main(namespace: argparse.Namespace):
 
     downloader.stop_all_runners()
     logger.info("Finished.")
-
-    # TODO: post-processing to rewrite all references in all downloaded files
 
 
 if __name__ == "__main__":
