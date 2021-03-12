@@ -373,8 +373,8 @@ class DownloadWorker:
             return urllib.parse.urlunparse(
                 (scheme, netloc, remove_dot_segments(path), params, query, "")
             )
-        if netloc == "":
-            netloc = self.downloader.netloc
+
+        netloc = self.downloader.netloc
 
         # Determine the new path
         if path == "":
