@@ -315,49 +315,96 @@ class DownloadWorker:
         """
         Transform the partly defined target string to a full URL
 
+        The implementation of this method is partly based on RFC 3986, section 5.1 and 5.2.
+
         :param target: anything that seems to be an URI, relative or absolute
         :return: a full URL that can be used to request further resources,
             if possible and the target matched the criteria (otherwise None)
         """
 
+        def merge_paths(a: urllib.parse.ParseResult, b: str) -> str:
+            """
+            Merge two paths, where `a` should be a base and `b` should be a reference
+            """
+
+            if not b.startswith("/"):
+                b = "/" + b
+            if a.netloc != "" and a.path == "":
+                return b
+            return "/".join(a.path.split("/")[:-1]) + b
+
+        def remove_dot_segments(p: str) -> str:
+            """
+            Remove the dot segments of a path `p`
+            """
+
+            if "./" in p or "/." in p:
+                self.logger.warning("Feature not implemented: remove_dot_segments")
+            return p
+
         url = urllib.parse.urlparse(target)
         scheme, netloc, path, params, query, fragment = url
 
-        # Unknown schemes are ignored (e.g. mailto:)
+        if self.base:
+            base = urllib.parse.urlparse(self.base)
+        else:
+            base = self.url
+
+        # Unknown schemes are ignored (e.g. mailto:) and a given schema indicates
+        # an absolute URL which should not be processed (only filtered)
         if scheme != "" and scheme.lower() not in ("http", "https"):
             return
-        elif scheme == "" and self.downloader.https_mode == 0:
-            scheme = self.url.scheme
-        elif scheme == "" and self.downloader.https_mode == 1:
-            scheme = "https"
-        elif scheme == "" and self.downloader.https_mode == 2:
-            scheme = "http"
+        elif scheme == "":
+            if self.downloader.https_mode == 0:
+                scheme = self.url.scheme
+            elif self.downloader.https_mode == 1:
+                scheme = "https"
+            elif self.downloader.https_mode == 2:
+                scheme = "http"
+        elif netloc != "" and netloc.lower() == self.downloader.netloc.lower():
+            return urllib.parse.urlunparse(
+                (scheme, netloc, remove_dot_segments(path), params, query, "")
+            )
 
         # Other network locations are ignored (so we don't traverse the whole web)
         if netloc != "" and netloc.lower() != self.downloader.netloc.lower():
             return
+        elif netloc != "":
+            return urllib.parse.urlunparse(
+                (scheme, netloc, remove_dot_segments(path), params, query, "")
+            )
         if netloc == "":
             netloc = self.downloader.netloc
 
         # Determine the new path
-        if path == "" and query != self.url.query:
-            path = self.url.path
-        elif self.base:
-            base = urllib.parse.urlparse(self.base)
-            if base.netloc != self.downloader.netloc:
-                self.logger.error(
-                    f"Probably broken `base` tag. Netloc '{base.netloc}' "
-                    f"differs from the current netloc '{self.downloader.netloc}."
-                )
-            elif base.path != "":
-                base_path = base.path
-                while not base_path.endswith("/") and len(base_path) > 0:
-                    base_path = base_path[:-1]
-                if base_path == "":
-                    base_path = "/"
-                path = base_path + path
+        if path == "":
+            path = base.path
+            if query == "":
+                query = base.query
+        else:
+            if path.startswith("/"):
+                path = remove_dot_segments(path)
+            else:
+                path = remove_dot_segments(merge_paths(base, path))
+        return urllib.parse.urlunparse(
+            (scheme, netloc, remove_dot_segments(path), params, query, "")
+        )
 
-        return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
+        # if self.base:
+        #     base = urllib.parse.urlparse(self.base)
+        #     if base.netloc != self.downloader.netloc:
+        #         self.logger.error(
+        #             f"Probably broken `base` tag. Netloc '{base.netloc}' "
+        #             f"differs from the current netloc '{self.downloader.netloc}."
+        #         )
+        #     elif base.path != "":
+        #         base_path = base.path
+        #         while not base_path.endswith("/") and len(base_path) > 0:
+        #             base_path = base_path[:-1]
+        #         if base_path == "":
+        #             base_path = "/"
+        #         path = base_path + path
+        # return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
 
     def _handle_hyperlinks(self):
         """
@@ -370,19 +417,10 @@ class DownloadWorker:
 
         for tag in self.soup.find_all("a"):
             if tag.has_attr("href"):
-                target = tag.get("href")
-                if target.startswith("#"):
-                    continue
-
-                url = urllib.parse.urlparse(target)
-                if url.scheme != "" and url.scheme not in ("http", "https"):
-                    continue
-                if url.netloc != "" and url.netloc != self.downloader.netloc:
-                    continue
-
-                # TODO: respect the base value
-
-                self.references.add(target)
+                target = self._get_target(tag.get("href"))
+                if target is not None:
+                    self.logger.debug(f"New reference: {target}")
+                    self.references.add(target)
 
     def _handle_links(self):
         """
