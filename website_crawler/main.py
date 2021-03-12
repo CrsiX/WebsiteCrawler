@@ -15,6 +15,8 @@ import requests
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
 QUEUE_ACCESS_TIMEOUT = 1
 
+_MAIN_SLEEP_TIME = 0.01
+
 
 class Downloader:
     """
@@ -465,8 +467,11 @@ class DownloadWorker:
             return
         self.started = True
 
-        self.logger.debug(f"Currently processing: {self.url}")
-        self.response = requests.get(self.url, headers={"User-Agent": USER_AGENT_STRING})
+        self.logger.debug(f"Currently processing: {self.url.geturl()}")
+        self.response = requests.get(
+            self.url.geturl(),
+            headers={"User-Agent": USER_AGENT_STRING}
+        )
         self.code = self.response.status_code
 
         if self.code != 200:
@@ -715,7 +720,7 @@ def main(namespace: argparse.Namespace):
         downloader.start_runner(f"runner{i}")
 
     while downloader.is_running():
-        time.sleep(QUEUE_ACCESS_TIMEOUT)
+        time.sleep(_MAIN_SLEEP_TIME)
 
     downloader.stop_all_runners()
     logger.info("Finished.")
