@@ -83,7 +83,8 @@ class Downloader:
         self.overwrite = overwrite
 
         if self.base_ref is not None:
-            self.logger.warning("Feature not supported yet: base_ref")
+            self.logger.warning("Feature not fully supported yet: base_ref")
+            self.logger.info("Note: the `base` tag will be removed, if available.")
         if self.load_image:
             self.logger.warning("Feature not supported yet: load_image")
         if self.rewrite_references:
@@ -544,12 +545,16 @@ class DownloadWorker:
         # Generate the 'soup' and extract the base reference, if possible
         if self.content_type.lower().startswith("text/html"):
             self.soup = bs4.BeautifulSoup(self.response.text, features="html.parser")
-            # self.base = self.downloader.netloc
             if self.soup.base is not None and self.soup.base.has_attr("href"):
                 self.base = self.soup.base.get("href")
                 if urllib.parse.urlparse(self.base).netloc == "":
                     self.base = urllib.parse.urljoin(self.downloader.netloc, self.base)
             self.logger.debug(f"Base: {self.base}")
+
+            # Remove all `base` tags
+            while self.soup.base:
+                self.logger.debug("Removing (one of) the `base` tag(s)")
+                self.soup.base.replace_with("")
 
             # Handle the various types of references, if enabled
             if self.downloader.load_hyperlinks:
