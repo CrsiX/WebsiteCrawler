@@ -424,51 +424,94 @@ class DownloadWorker:
         #         path = base_path + path
         # return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
 
+    def _get_relative_path(self, ref: str) -> str:
+        """
+        Get the relative path pointing from the current file towards `ref`
+
+        :param ref: any kind of reference, but works best for absolute URLs
+            (therefore, one should better call `_get_target` on it first)
+        :return: relative path pointing from the current file towards the reference
+        """
+
+    def _handle_specific_tag(
+            self,
+            tag_type: str,
+            attr_name: str,
+            filter_function: typing.Callable[[bs4.element.Tag], bool] = lambda x: True
+    ):
+        """
+        Handle all tags of a specific type using one of its attributes
+
+        This method extracts the URLs found in all tags of the specified type,
+        provided the name of the attribute where the URL will be found is
+        present as well. If rewriting of references had been enabled, this step
+        will also be done in this method. Use the filter function to restrict
+        the range of scanned and processed tags in the input file.
+
+        :param tag_type: type of HTML tag (e.g. `a` or `img`)
+        :param attr_name: attribute name for that tag (e.g. `href` or `src`)
+        :param filter_function: function which accepts exactly one parameter,
+            one single HTML tag, and determines whether this tag should be analyzed
+            (filtering and processing of URLs takes place after this filter, so
+            one doesn't need to care about e.g. schemes or other network locations)
+        """
+
+        for tag in self.soup.find_all(tag_type):
+            if tag.has_attr(attr_name) and filter_function(tag):
+                target = self._get_target(tag.get(attr_name))
+                if target is not None:
+                    self.logger.debug(f"New reference: {target}")
+                    self.references.add(target)
+                    tag.attrs[attr_name] = self._get_relative_path(target)
+
     def _handle_hyperlinks(self):
         """
         Handle all `a` tags occurring in the file (represented as soup)
 
         This method extracts the URLs of all hyperlink references of `a` tags
-        and adds them to the set of references if it matches the criteria. If rewriting
-        of references had been enabled, this step will also be done in this method.
+        and adds them to the set of references if it matches the criteria. If
+        rewriting of references had been enabled, this step will also be done here.
         """
 
-        for tag in self.soup.find_all("a"):
-            if tag.has_attr("href"):
-                target = self._get_target(tag.get("href"))
-                if target is not None:
-                    self.logger.debug(f"New reference: {target}")
-                    self.references.add(target)
+        self._handle_specific_tag("a", "href")
 
     def _handle_links(self):
         """
         Handle all `link` tags occurring in the file (represented as soup)
 
-        This method extracts the URLs of all external resources mentioned in `link` tags
-        and adds them to the set of references if it matches the criteria. If rewriting
-        of references had been enabled, this step will also be done in this method.
+        This method extracts the URLs of all external resources mentioned in `link`
+        tags and adds them to the set of references if it matches the criteria. If
+        rewriting of references had been enabled, this step will also be done here.
         """
 
-        self.logger.debug("_handle_links is not implemented yet.")
+        def filter_func(tag: bs4.element.Tag) -> bool:
+            if tag.has_attr("rel"):
+                is_css = tag.get("rel") == "stylesheet"
+                enabled = not tag.has_attr("disabled")
+                if self.downloader.load_css and is_css and enabled:
+                    return True
+            return False
+
+        self._handle_specific_tag("link", "href", filter_func)
 
     def _handle_scripts(self):
         """
         Handle all `script` tags occurring in the file (represented as soup)
 
-        This method extracts the URLs of all external resources mentioned in `script` tags
-        and adds them to the set of references if it matches the criteria. If rewriting
-        of references had been enabled, this step will also be done in this method.
+        This method extracts the URLs of all external resources mentioned in `script`
+        tags and adds them to the set of references if it matches the criteria. If
+        rewriting of references had been enabled, this step will also be done here.
         """
 
-        self.logger.debug("_handle_scripts is not implemented yet.")
+        self._handle_specific_tag("script", "src")
 
     def _handle_images(self):
         """
         Handle all `img` tags occurring in the file (represented as soup)
 
-        This method extracts the URLs of all external resources mentioned in `img` tags
-        and adds them to the set of references if it matches the criteria. If rewriting
-        of references had been enabled, this step will also be done in this method.
+        This method extracts the URLs of all external resources mentioned in `img`
+        tags and adds them to the set of references if it matches the criteria. If
+        rewriting of references had been enabled, this step will also be done here.
         """
 
         self.logger.debug("_handle_images is not implemented yet.")
