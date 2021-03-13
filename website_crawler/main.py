@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import time
 import queue
 import typing
@@ -124,6 +125,21 @@ class Downloader:
 
         self.queue.put(website)
         self.logger.debug("Initialized downloader.")
+
+    def get_status(self) -> str:
+        """
+        Return a short status message containing parsable state information
+
+        :return: comma separated string of key=value pairs
+        """
+
+        return (
+            f"runners={len(self.runners)},"
+            f"downloads_total={len(self.downloads)},"
+            f"downloads_okay={len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))},"
+            f"downloads_doing={len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))},"
+            f"queue_size={self.queue.qsize()}"
+        )
 
     def start_runner(self, key: str) -> bool:
         """
@@ -680,6 +696,15 @@ def setup() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--status",
+        help="print current status messages to stderr every n seconds",
+        dest="status",
+        metavar="n",
+        type=float,
+        default=0
+    )
+
+    parser.add_argument(
         "--third-party",
         help="switch to enable download of third party resources (CSS, JS, images)",
         dest="third_party",
@@ -718,6 +743,14 @@ def main(namespace: argparse.Namespace):
     downloader = Downloader.from_namespace(namespace, logger)
     for i in range(namespace.threads):
         downloader.start_runner(f"runner{i}")
+
+    def _print_status():
+        while True:
+            time.sleep(namespace.status)
+            print(downloader.get_status(), file=sys.stderr)
+
+    if namespace.status > 0:
+        threading.Thread(target=_print_status, daemon=True).start()
 
     while downloader.is_running():
         time.sleep(_MAIN_SLEEP_TIME)
