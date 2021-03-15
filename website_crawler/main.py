@@ -13,6 +13,9 @@ import urllib.parse
 import bs4
 import requests
 
+import helper
+
+
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
 QUEUE_ACCESS_TIMEOUT = 1
 
@@ -439,6 +442,16 @@ class DownloadWorker:
         :return: relative path pointing from the current file towards the reference
         """
 
+        path = urllib.parse.urlparse(ref).path
+        if self.downloader.ascii_only:
+            path = helper.convert_to_ascii_only(
+                path,
+                helper.SMALL_ASCII_CONVERSION_TABLE
+            )
+        if self.downloader.lowered:
+            path = path.lower()
+        return path
+
     def _handle_specific_tag(
             self,
             tag_type: str,
@@ -573,6 +586,10 @@ class DownloadWorker:
 
         # Determine the filename under which the content should be stored
         path = self.url.path
+        if self.downloader.ascii_only:
+            path = helper.convert_to_ascii_only(path, helper.SMALL_ASCII_CONVERSION_TABLE)
+        if self.downloader.lowered:
+            path = path.lower()
         if path.startswith("/"):
             path = path[1:]
         if len(path) == "":
