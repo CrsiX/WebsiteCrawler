@@ -492,7 +492,7 @@ class DownloadWorker:
 
         def filter_func(tag: bs4.element.Tag) -> bool:
             if tag.has_attr("rel"):
-                is_css = tag.get("rel") == "stylesheet"
+                is_css = "stylesheet" in tag.get("rel")
                 enabled = not tag.has_attr("disabled")
                 if self.downloader.load_css and is_css and enabled:
                     return True
@@ -680,6 +680,7 @@ def setup() -> argparse.ArgumentParser:
         help="set or remove the base tag (if existing)",
         dest="base_ref",
         metavar="ref",
+        type=location,
         default=None
     )
 
