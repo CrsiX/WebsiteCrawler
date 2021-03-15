@@ -417,22 +417,6 @@ class DownloadWorker:
             (scheme, netloc, remove_dot_segments(path), params, query, "")
         )
 
-        # if self.base:
-        #     base = urllib.parse.urlparse(self.base)
-        #     if base.netloc != self.downloader.netloc:
-        #         self.logger.error(
-        #             f"Probably broken `base` tag. Netloc '{base.netloc}' "
-        #             f"differs from the current netloc '{self.downloader.netloc}."
-        #         )
-        #     elif base.path != "":
-        #         base_path = base.path
-        #         while not base_path.endswith("/") and len(base_path) > 0:
-        #             base_path = base_path[:-1]
-        #         if base_path == "":
-        #             base_path = "/"
-        #         path = base_path + path
-        # return urllib.parse.urlunparse((scheme, netloc, path, params, query, fragment))
-
     def _get_relative_path(self, ref: str) -> str:
         """
         Get the relative path pointing from the current file towards `ref`
