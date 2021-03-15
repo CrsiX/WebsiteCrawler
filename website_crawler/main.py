@@ -47,6 +47,8 @@ class Downloader:
     :param prettify: switch to enable prettifying the resulting HTML file to improve
         the file's readability (but may also introduce whitespace errors)
     :param overwrite: allow overwriting existing files (default: True)
+    :param ascii_only: use ASCII chars in link and file names only (all other
+        chars will be replaced with suitable characters or the underscore)
     """
 
     def __init__(
@@ -64,7 +66,8 @@ class Downloader:
             lowered: bool = False,
             third_party: bool = False,
             prettify: bool = False,
-            overwrite: bool = True
+            overwrite: bool = True,
+            ascii_only: bool = False
     ):
         self.website = website
         self.target = target
@@ -81,6 +84,7 @@ class Downloader:
         self.third_party = third_party
         self.prettify = prettify
         self.overwrite = overwrite
+        self.ascii_only = ascii_only
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
@@ -277,7 +281,8 @@ class Downloader:
             rewrite_references=namespace.rewrite,
             third_party=namespace.third_party,
             prettify=namespace.prettify,
-            overwrite=namespace.overwrite
+            overwrite=namespace.overwrite,
+            ascii_only=namespace.ascii_only
         )
 
 
@@ -660,6 +665,13 @@ def setup() -> argparse.ArgumentParser:
         "--verbose",
         help="print verbose information",
         dest="verbose",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--ascii",
+        help="use ASCII chars for link and file names only",
+        dest="ascii_only",
         action="store_true"
     )
 
