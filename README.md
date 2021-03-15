@@ -12,3 +12,4 @@ Use this tool to retrieve whole websites and store them locally.
 - No support for dynamic loading (e.g. XHR)
 - No CSS, JavaScript or other stuff is ever _interpreted_ or _executed_
 - No authentication
+- No fonts, images and other sources in CSS or JavaScript files
