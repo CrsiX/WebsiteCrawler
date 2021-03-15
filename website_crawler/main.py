@@ -29,9 +29,9 @@ class Downloader:
     :param https_mode: whether to enforce or reject HTTPS connections
         (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP;
         note that web servers might forward HTTP to HTTPS by default using 301 responses)
-    :param base_ref: string for the `base` HTML tag (if it's None, the base ref
-        element won't be touched, no matter if it exists; if it's the empty string,
-        the base reference will be removed from the resulting markup)
+    :param base_ref: string for the `base` HTML tag (if it's None or an empty string,
+        the `base` tag will be removed, if it exists; otherwise, the specified value
+        will be used to build a new `base` tag to allow forming of relative paths)
     :param load_hyperlinks: determine whether HTML files from `a` tags should be loaded
     :param load_css: determine whether CSS files from `style` tags should be loaded
     :param load_js: determine whether JavaScript files from `script` tags should be loaded
@@ -84,7 +84,7 @@ class Downloader:
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
-            self.logger.info("Note: the `base` tag will be removed, if available.")
+            self.logger.info("Note: the `base` tag will always be removed, if available.")
         if self.load_image:
             self.logger.warning("Feature not supported yet: load_image")
         if self.rewrite_references:
