@@ -282,6 +282,7 @@ class Downloader:
             load_js=namespace.javascript_download,
             load_image=namespace.image_download,
             rewrite_references=namespace.rewrite,
+            lowered=namespace.lowered,
             third_party=namespace.third_party,
             prettify=namespace.prettify,
             overwrite=namespace.overwrite,
@@ -517,7 +518,7 @@ class DownloadWorker:
         rewriting of references had been enabled, this step will also be done here.
         """
 
-        self.logger.debug("_handle_images is not implemented yet.")
+        self._handle_specific_tag("img", "src")
 
     def run(self):
         """
