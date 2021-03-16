@@ -7,7 +7,7 @@ import argparse
 import threading
 import urllib.parse
 
-import downloader
+import website_crawler
 
 
 _MAIN_SLEEP_TIME = 0.01
@@ -225,7 +225,7 @@ def main(namespace: argparse.Namespace):
     logging.basicConfig(**logging_setup)
 
     logger = logging.getLogger("crawler")
-    loader = downloader.Downloader.from_namespace(namespace, logger)
+    loader = website_crawler.construct_from_namespace(namespace, logger)
     for i in range(namespace.threads):
         loader.start_runner(f"runner{i}")
 
