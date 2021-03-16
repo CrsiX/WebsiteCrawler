@@ -58,6 +58,8 @@ class Downloader:
         "unique" filename will only contain ASCII characters of course)
     :param crash_on_error: worker threads will crash when they encounter unexpected
         problems (otherwise, they would send the traceback to stdout and continue)
+    :param queue_access_timeout: timeout to access the queue in seconds (higher
+        values potentially decrease load but may also negatively affect speed)
     """
 
     def __init__(
@@ -79,7 +81,8 @@ class Downloader:
             ascii_only: bool = False,
             user_agent: str = None,
             unique_filenames: bool = False,
-            crash_on_error: bool = False
+            crash_on_error: bool = False,
+            queue_access_timeout: float = None
     ):
         self.website = website
         self.target = target
@@ -97,9 +100,12 @@ class Downloader:
         self.prettify = prettify
         self.overwrite = overwrite
         self.ascii_only = ascii_only
-        self.user_agent = user_agent if user_agent is not None else USER_AGENT_STRING
+        self.user_agent = user_agent \
+            if user_agent is not None else USER_AGENT_STRING
         self.unique_filenames = unique_filenames
         self.crash_on_error = crash_on_error
+        self.queue_access_timeout = queue_access_timeout \
+            if queue_access_timeout is not None else QUEUE_ACCESS_TIMEOUT
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
@@ -252,7 +258,7 @@ class Downloader:
 
         while self._runner_states[ident] < 2 or self._runner_states[ident] == 5:
             try:
-                current_job = self.queue.get(True, QUEUE_ACCESS_TIMEOUT)
+                current_job = self.queue.get(True, self.queue_access_timeout)
                 self._runner_states[ident] = 1
             except queue.Empty:
                 if self._runner_states[ident] < 2:
