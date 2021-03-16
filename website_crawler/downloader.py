@@ -12,7 +12,7 @@ import urllib.parse
 import bs4
 import requests
 
-import helper
+from . import helper
 
 
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"

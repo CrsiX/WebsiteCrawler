@@ -5,7 +5,7 @@ WebsiteCrawler: a deep website cloning tool
 from logging import Logger as _Logger
 from argparse import Namespace as _Namespace
 
-from downloader import Downloader
+from .downloader import Downloader
 
 
 def construct_from_namespace(namespace: _Namespace, logger: _Logger) -> Downloader:
