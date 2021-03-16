@@ -17,7 +17,7 @@ import helper
 
 
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
-QUEUE_ACCESS_TIMEOUT = 1
+QUEUE_ACCESS_TIMEOUT = 0.1
 
 _MAIN_SLEEP_TIME = 0.01
 
@@ -31,7 +31,8 @@ class Downloader:
     :param logger: logger used to keep track of various events
     :param https_mode: whether to enforce or reject HTTPS connections
         (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP;
-        note that web servers might forward HTTP to HTTPS by default using 301 responses)
+        3: try HTTPS first, but fall back to using HTTP if errors occur; note
+        that web servers might forward HTTP to HTTPS by default using 301 responses)
     :param base_ref: string for the `base` HTML tag (if it's None or an empty string,
         the `base` tag will be removed, if it exists; otherwise, the specified value
         will be used to build a new `base` tag to allow forming of relative paths)
@@ -52,6 +53,13 @@ class Downloader:
     :param overwrite: allow overwriting existing files (default: True)
     :param ascii_only: use ASCII chars in link and file names only (all other
         chars will be replaced with suitable characters or the underscore)
+    :param user_agent: use a custom user agent string for HTTP(S) requests
+    :param unique_filenames: use unique filenames for all files stored on disk
+        (fixes problems in case files have the same name but differ in lowercase
+        and uppercase or when ASCII-only filenames are requested, because the
+        "unique" filename will only contain ASCII characters of course)
+    :param crash_on_error: worker threads will crash when they encounter unexpected
+        problems (otherwise, they would send the traceback to stdout and continue)
     """
 
     def __init__(
@@ -70,7 +78,10 @@ class Downloader:
             third_party: bool = False,
             prettify: bool = False,
             overwrite: bool = True,
-            ascii_only: bool = False
+            ascii_only: bool = False,
+            user_agent: str = None,
+            unique_filenames: bool = False,
+            crash_on_error: bool = False
     ):
         self.website = website
         self.target = target
@@ -88,34 +99,42 @@ class Downloader:
         self.prettify = prettify
         self.overwrite = overwrite
         self.ascii_only = ascii_only
+        self.user_agent = user_agent if user_agent is not None else USER_AGENT_STRING
+        self.unique_filenames = unique_filenames
+        self.crash_on_error = crash_on_error
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
-            self.logger.info("Note: the `base` tag will always be removed, if available.")
-        if self.load_image:
-            self.logger.warning("Feature not supported yet: load_image")
-        if self.rewrite_references:
-            self.logger.warning("Feature not supported yet: rewrite_references")
+            self.logger.info("The `base` tag will always be removed, if available.")
         if not self.rewrite_references and self.lowered:
             self.logger.info("Feature disabled: lowered")
             self.lowered = False
-        if self.lowered:
-            self.logger.warning("Feature not supported yet: lowered")
+        if self.third_party:
+            self.logger.warning("Feature not supported yet: third_party")
+        if not self.rewrite_references and self.unique_filenames:
+            self.logger.warning("Feature disabled: unique_filenames")
+            self.unique_filenames = False
+        if self.unique_filenames:
+            self.logger.warning("Feature not supported yet: unique_filenames")
 
         self.netloc = urllib.parse.urlparse(self.website).netloc
         if self.netloc == "":
             self.logger.error("Empty net location! Further operation might fail.")
 
-        if https_mode not in (0, 1, 2):
-            logger.error(f"Unknown https mode detected: {https_mode}")
-            logger.warning("Set https mode to default value.")
+        if https_mode not in (0, 1, 2, 3):
+            self.logger.error(f"Unknown https mode detected: {https_mode}")
+            self.logger.warning("Set https mode to default value.")
+            self.https_mode = 0
+        elif https_mode == 3:
+            self.logger.warning("Feature not supported yet: https_mode=3")
+            self.logger.warning("Set https mode to default value.")
             self.https_mode = 0
 
         if not os.path.exists(target):
             os.makedirs(target, exist_ok=True)
             self.logger.debug("Created missing target directory.")
         elif not os.path.isdir(target):
-            logger.critical("Target directory is no directory!")
+            self.logger.critical("Target directory is no directory!")
             raise RuntimeError("Target directory is no directory!")
 
         self.runners = {}
@@ -142,7 +161,8 @@ class Downloader:
         """
 
         return (
-            f"runners={len(self.runners)},"
+            f"runners_total={len(self.runners)},"
+            f"runners_dead={len(list(filter(lambda x: x in (3, 4), self.runners)))},"
             f"downloads_total={len(self.downloads)},"
             f"downloads_okay={len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))},"
             f"downloads_doing={len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))},"
@@ -243,6 +263,10 @@ class Downloader:
 
             # Avoid duplicates in the queue by reserving the downloads 'slot'
             if current_job in self.downloads:
+                self.logger.debug(
+                    f"Ignoring queue job '{current_job}' "
+                    f"(download state {self.downloads[current_job]})"
+                )
                 continue
             self.downloads[current_job] = 0
 
@@ -255,8 +279,9 @@ class Downloader:
                 self.downloads[current_job] = worker.code
             except:
                 logger.error(f"Error during handling of '{current_job}'!", exc_info=True)
-                self._runner_states[ident] = 4
-                raise
+                if self.crash_on_error:
+                    self._runner_states[ident] = 4
+                    raise
 
         self._runner_states[ident] = 3
 
@@ -271,11 +296,19 @@ class Downloader:
         :raises AttributeError: in case a required namespace attribute is missing
         """
 
+        https_mode = 0
+        if namespace.https_only:
+            https_mode = 1
+        elif namespace.http_only:
+            https_mode = 2
+        elif namespace.https_first:
+            https_mode = 3
+
         return Downloader(
             website=namespace.website,
             target=namespace.target,
             logger=logger,
-            https_mode=namespace.https_mode,
+            https_mode=https_mode,
             base_ref=namespace.base_ref,
             load_hyperlinks=namespace.explore,
             load_css=namespace.css_download,
@@ -286,7 +319,10 @@ class Downloader:
             third_party=namespace.third_party,
             prettify=namespace.prettify,
             overwrite=namespace.overwrite,
-            ascii_only=namespace.ascii_only
+            ascii_only=namespace.ascii_only,
+            unique_filenames=namespace.unique_filenames,
+            user_agent=namespace.user_agent,
+            crash_on_error=namespace.crash_on_error
         )
 
 
@@ -533,7 +569,7 @@ class DownloadWorker:
         self.logger.debug(f"Currently processing: {self.url.geturl()}")
         self.response = requests.get(
             self.url.geturl(),
-            headers={"User-Agent": USER_AGENT_STRING}
+            headers={"User-Agent": self.downloader.user_agent}
         )
         self.code = self.response.status_code
 
@@ -679,11 +715,18 @@ def setup() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--base",
-        help="set or remove the base tag (if existing)",
+        help="set or remove the `base` tag (if existing)",
         dest="base_ref",
         metavar="ref",
         type=location,
         default=None
+    )
+
+    parser.add_argument(
+        "--crash",
+        help="exit runner threads on exit (continue otherwise)",
+        dest="crash_on_error",
+        action="store_true"
     )
 
     parser.add_argument(
@@ -693,13 +736,24 @@ def setup() -> argparse.ArgumentParser:
         action="store_true"
     )
 
-    parser.add_argument(
+    https_mode = parser.add_mutually_exclusive_group()
+    https_mode.add_argument(
+        "--http",
+        help="try enforcing HTTP mode on all connections",
+        dest="http_only",
+        action="store_true"
+    )
+    https_mode.add_argument(
         "--https",
-        help="https support mode (enforce or reject HTTPS connections)",
-        dest="https_mode",
-        metavar="mode",
-        type=int,
-        choices=[0, 1, 2]
+        help="try enforcing HTTPS mode on all connections",
+        dest="https_only",
+        action="store_true"
+    )
+    https_mode.add_argument(
+        "--https-first",
+        help="try HTTPS mode first, then fall back to HTTP on errors",
+        dest="https_only",
+        action="store_true"
     )
 
     parser.add_argument(
@@ -753,7 +807,7 @@ def setup() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--rewrite",
-        help="switch to rewrite hyperlink references to other downloaded content",
+        help="rewrite references to other downloaded content",
         dest="rewrite",
         action="store_true"
     )
@@ -769,7 +823,7 @@ def setup() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--third-party",
-        help="switch to enable download of third party resources (CSS, JS, images)",
+        help="also download third party resources (CSS, JS, images only)",
         dest="third_party",
         action="store_true"
     )
@@ -781,6 +835,21 @@ def setup() -> argparse.ArgumentParser:
         default=4,
         metavar="n",
         type=int
+    )
+
+    parser.add_argument(
+        "--unique",
+        help="use unique file names (improves third party usage)",
+        dest="unique_filenames",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--user-agent",
+        help="custom user agent string for the HTTP(S) requests",
+        dest="user_agent",
+        metavar="x",
+        default=None
     )
 
     return parser
