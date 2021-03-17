@@ -170,3 +170,8 @@ class DownloadJob:
         for k, v in kwargs.items():
             if k in self.__slots__ and not k.startswith("remote"):
                 setattr(self, k, v)
+
+    def __repr__(self) -> str:
+        if self.response_code is None:
+            return f"DownloadJob<{self.remote_path}>()"
+        return f"DownloadJob<{self.remote_path}>({self.response_code})"
