@@ -176,13 +176,18 @@ class DownloadJob:
             return f"DownloadJob<{self.remote_path}>()"
         return f"DownloadJob<{self.remote_path}>({self.response_code})"
 
-    def copy(self):
+    def copy(self, remote: typing.Union[str, urllib.parse.ParseResult, None] = None):
         """
-        Create a copy of self
+        Create a copy of self, possibly replacing the remote endpoint
+
+        :param remote: optional new endpoint of the new job
         """
 
+        if remote is None:
+            remote = self.remote_url
+
         return DownloadJob(
-            self.remote_url,
+            remote,
             self.local_base,
             self.logger,
             self.analyzer.copy()
