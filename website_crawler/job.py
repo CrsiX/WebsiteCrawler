@@ -175,3 +175,15 @@ class DownloadJob:
         if self.response_code is None:
             return f"DownloadJob<{self.remote_path}>()"
         return f"DownloadJob<{self.remote_path}>({self.response_code})"
+
+    def copy(self):
+        """
+        Create a copy of self
+        """
+
+        return DownloadJob(
+            self.remote_url,
+            self.local_base,
+            self.logger,
+            self.analyzer.copy()
+        )
