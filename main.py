@@ -227,7 +227,7 @@ def main(namespace: argparse.Namespace):
     logger = logging.getLogger("crawler")
     loader = website_crawler.construct_from_namespace(namespace, logger)
     for i in range(namespace.threads):
-        loader.start_runner(f"runner{i}")
+        loader.start_new_runner()
 
     def _print_status():
         while True:
