@@ -6,6 +6,8 @@ import queue
 import logging
 import typing
 
+from . import processor
+
 
 class Runner:
     """
@@ -20,7 +22,7 @@ class Runner:
     logger: logging.Logger
     """Logger which will be used for logging"""
     exception: typing.Optional[Exception]
-    """Exception that caused the runner to crash, if available"""
+    """Exception raised while processing a job, if available"""
     crash_on_error: bool
     """Determine whether to kill this runner when a processor throws an exception"""
 
@@ -73,5 +75,26 @@ class Runner:
                 if self.state < 2:
                     self.state = 5
                 continue
+
+            try:
+                worker = processor.DownloadProcessor(current_job, **self.processor_kwargs)
+                if worker.run():
+                    self.logger.debug(f"Worker processed {current_job} successfully.")
+                else:
+                    self.logger.debug(f"Processing of {current_job} failed somehow.")
+
+                # TODO: handle derived jobs
+                if len(worker.descendants) > 0:
+                    self.logger.warning(f"Found {len(worker.descendants)} new derived jobs.")
+
+                for item in set(current_job.references):
+                    self.job_queue.put(item)
+
+            except Exception as exc:
+                self.exception = exc
+                self.logger.error(f"Error during handling of '{current_job}'!", exc_info=True)
+                if self.crash_on_error:
+                    self.state = 4
+                    raise
 
         self.state = 3
