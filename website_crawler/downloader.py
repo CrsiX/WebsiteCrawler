@@ -10,10 +10,7 @@ import threading
 import urllib.parse
 
 from .runner import Runner
-
-
-USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
-QUEUE_ACCESS_TIMEOUT = 0.1
+from .constants import DEFAULT_USER_AGENT_STRING, DEFAULT_QUEUE_ACCESS_TIMEOUT
 
 
 class Downloader:
@@ -97,11 +94,11 @@ class Downloader:
         self.overwrite = overwrite
         self.ascii_only = ascii_only
         self.user_agent = user_agent \
-            if user_agent is not None else USER_AGENT_STRING
+            if user_agent is not None else DEFAULT_USER_AGENT_STRING
         self.unique_filenames = unique_filenames
         self.crash_on_error = crash_on_error
         self.queue_access_timeout = queue_access_timeout \
-            if queue_access_timeout is not None else QUEUE_ACCESS_TIMEOUT
+            if queue_access_timeout is not None else DEFAULT_QUEUE_ACCESS_TIMEOUT
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
