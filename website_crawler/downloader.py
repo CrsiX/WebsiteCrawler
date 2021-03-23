@@ -9,10 +9,7 @@ import logging
 import threading
 import urllib.parse
 
-import bs4
-import requests
-
-from . import helper
+from .runner import Runner
 
 
 USER_AGENT_STRING = "Mozilla/5.0 (compatible; WebsiteCrawler)"
@@ -140,7 +137,7 @@ class Downloader:
             self.logger.critical("Target directory is no directory!")
             raise RuntimeError("Target directory is no directory!")
 
-        self.runners = {}
+        self._runners = {}
         self.downloads = {}
         self.queue = queue.Queue()
 
@@ -153,6 +150,14 @@ class Downloader:
         # 5 -> the runner skipped an iteration due to an empty queue (running)
         self._runner_states = {}
 
+        def _ident():
+            n = 0
+            while True:
+                yield n
+                n += 1
+
+        self._runner_ident = _ident()
+
         self.queue.put(website)
         self.logger.debug("Initialized downloader.")
 
@@ -164,33 +169,34 @@ class Downloader:
         """
 
         return (
-            f"runners_total={len(self.runners)},"
-            f"runners_dead={len(list(filter(lambda x: x in (3, 4), self.runners)))},"
+            f"runners_total={len(self._runners)},"
+            f"runners_dead={len(list(filter(lambda k: self._runners[k][0].state in (3, 4), self._runners)))},"
             f"downloads_total={len(self.downloads)},"
             f"downloads_okay={len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))},"
             f"downloads_doing={len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))},"
             f"queue_size={self.queue.qsize()}"
         )
 
-    def start_runner(self, key: str) -> bool:
+    def start_new_runner(self):
         """
-        Start a runner in a separate thread
-
-        :param key: identification key for the runner (and suffix of its logger)
-        :return: whether a new runner has been added successfully
+        Start a new runner in a separate thread
         """
 
-        if key in self.runners:
-            self.logger.error(f"Couldn't add runner '{key}' as it's already there.")
-            return False
+        ident = next(self._runner_ident)
+        runner = Runner(
+            self.queue,
+            logging.getLogger(f"runner{ident}"),
+            self.queue_access_timeout,
+            self.crash_on_error,
+            {}
+        )
 
-        r = threading.Thread(target=self._run, args=(key,), daemon=False)
-        self.runners[key] = r
-        self._runner_states[key] = 0
-        self.logger.debug(f"Added runner '{key}'.")
-        r.start()
+        thread = threading.Thread(target=runner.run, daemon=False)
+        self._runners[ident] = runner, thread
+        self.logger.debug(f"Added runner '{ident}'.")
+        thread.start()
 
-    def stop_runner(self, key: str, timeout: int) -> bool:
+    def stop_runner(self, key: int, timeout: int) -> bool:
         """
         Join the specified runner (which is a blocking operation)
 
@@ -199,12 +205,12 @@ class Downloader:
         :return: whether the runner was found and told to stop
         """
 
-        if key not in self.runners:
+        if key not in self._runners:
             self.logger.warning(f"Runner '{key}' couldn't be stopped: not found.")
             return False
 
-        self._runner_states[key] = 2
-        self.runners[key].join(timeout=timeout)
+        self._runners[key][0].state = 2
+        self._runners[key][1].join(timeout=timeout)
         return True
 
     def stop_all_runners(self) -> bool:
@@ -212,22 +218,24 @@ class Downloader:
         Join all runners
 
         This is a blocking operation. Note that this might take an infinite
-        amount of time if the runner is not about to exit.
+        amount of time if at least one runner is not about to exit.
 
         :return: success of the operation (whether all runners have exited)
         """
 
-        for key in self.runners:
-            if self._runner_states[key] in (0, 1, 5):
-                self._runner_states[key] = 2
-                self.logger.debug(f"Set runner state of '{key}' -> 2")
-            elif self._runner_states[key] == 3:
+        for key in self._runners:
+            runner, thread = self._runners[key]
+            if runner.state in (0, 1, 5):
+                runner.state = 2
+                self.logger.debug(f"Set runner state of runner '{key}' -> 2")
+            elif runner.state == 3:
                 self.logger.debug(f"Runner '{key}' seems to have already finished")
-            elif self._runner_states[key] == 4:
+            elif runner.state == 4:
                 self.logger.debug(f"Runner '{key}' seems to have already crashed")
 
-        for key in self.runners:
-            self.runners[key].join()
+        for key in self._runners:
+            runner, thread = self._runners[key]
+            thread.join()
             self.logger.debug(f"Stopped runner '{key}'")
 
         return True
@@ -240,8 +248,8 @@ class Downloader:
         """
 
         return any(map(
-            lambda k: self._runner_states[k] in (0, 1, 2),
-            self._runner_states
+            lambda k: self._runners[k][0].state in (0, 1, 2),
+            self._runners.keys()
         ))
 
     def _run(self, ident: str):
