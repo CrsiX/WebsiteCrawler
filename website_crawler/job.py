@@ -180,6 +180,8 @@ class DownloadJob:
         """
         Create a copy of self, possibly replacing the remote endpoint
 
+        Note that this copy is a *new* job, i.e. no progress will be copied.
+
         :param remote: optional new endpoint of the new job
         """
 
