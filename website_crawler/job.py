@@ -10,6 +10,8 @@ import urllib.parse
 import bs4
 import requests
 
+from constants import DEFAULT_USER_AGENT_STRING
+
 
 class DownloadJob:
     """
@@ -35,6 +37,7 @@ class DownloadJob:
         "local_path",
         "final_content",
         "https_mode",
+        "user_agent",
         "prettify",
         "allow_rewrites",
         "allow_overwrites",
@@ -84,6 +87,8 @@ class DownloadJob:
     # Various options that change the behavior of the processing unit(s)
     https_mode: int
     """Mode affecting the use of HTTPS, see the description in the Downloader class"""
+    user_agent: str
+    """User-agent string as sent in the HTTP header to query the remote side"""
     prettify: bool
     """Determine whether to 'prettify' the resulting output (HTML data only)"""
     allow_rewrites: bool
@@ -152,6 +157,7 @@ class DownloadJob:
         self.final_content = None
 
         self.https_mode = 0
+        self.user_agent = DEFAULT_USER_AGENT_STRING
         self.prettify = False
         self.allow_rewrites = True
         self.allow_overwrites = True
