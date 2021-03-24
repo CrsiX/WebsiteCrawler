@@ -30,7 +30,7 @@ class DownloadJob:
         "response",
         "response_code",
         "response_type",
-        "analyzer",
+        "handler",
         "references",
         "soup",
         "local_base",
@@ -68,9 +68,9 @@ class DownloadJob:
     response_type: typing.Optional[str]
     """Value of the HTTP header field 'Content-Type'"""
 
-    # Information about the state of the processing (specifically the content analyze)
-    analyzer: typing.Dict[str, typing.Callable]  # TODO: precise -> signature of callable
-    """Collection of analyzers of the HTML content, identified by a name"""
+    # Information about the state of the processing (specifically the content handling)
+    handler: typing.Dict[str, typing.Callable[["DownloadJob"], bool]]
+    """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Dict[str, typing.Set[str]]
     """Storage of references found in the analyzed response, grouped by type of analyzer"""
     soup: typing.Optional[bs4.BeautifulSoup]
@@ -123,7 +123,7 @@ class DownloadJob:
             remote: typing.Union[str, urllib.parse.ParseResult],
             local_base: str,
             logger: logging.Logger,
-            analyzer: typing.Dict[str, typing.Callable],
+            handler: typing.Dict[str, typing.Callable[["DownloadJob"], bool]],
             **kwargs
     ):
 
@@ -148,7 +148,7 @@ class DownloadJob:
         self.response_code = None
         self.response_type = None
 
-        self.analyzer = analyzer
+        self.handler = handler
         self.references = {}
         self.soup = None
 
@@ -198,5 +198,5 @@ class DownloadJob:
             remote,
             self.local_base,
             self.logger,
-            self.analyzer.copy()
+            self.handler.copy()
         )
