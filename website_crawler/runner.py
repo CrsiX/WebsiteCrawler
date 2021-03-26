@@ -36,8 +36,8 @@ class Runner:
     state: int
     """Current state of the runner"""
 
-    processor_kwargs: dict
-    """Dictionary of keyword arguments supplied to the processor's constructor"""
+    handler_options: dict
+    """Dictionary of keyword arguments supplied to download handlers"""
 
     def __init__(
             self,
@@ -45,7 +45,7 @@ class Runner:
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
-            processor_kwargs: dict = None
+            handler_options: dict = None
     ):
         self.job_queue = job_queue
         self.logger = logger
@@ -55,9 +55,9 @@ class Runner:
         self.exception = None
         self.state = 0
 
-        self.processor_kwargs = processor_kwargs
-        if processor_kwargs is None:
-            self.processor_kwargs = {}
+        self.handler_options = handler_options
+        if handler_options is None:
+            self.handler_options = {}
 
     def run(self):
         """
@@ -77,7 +77,7 @@ class Runner:
                 continue
 
             try:
-                worker = processor.DownloadProcessor(current_job, **self.processor_kwargs)
+                worker = processor.DownloadProcessor(current_job, self.handler_options)
                 if worker.run():
                     self.logger.debug(f"Worker processed {current_job} successfully.")
                 else:

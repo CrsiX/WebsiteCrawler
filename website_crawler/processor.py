@@ -170,16 +170,17 @@ class DownloadProcessor(BaseProcessor):
 
     :param job: description of a single download job (will also be
         accessed in read-write manner to store various flags and data)
-    :param user_agent: user agent string to use for HTTP requests
+    :param handler_options: dictionary of various options that will
+        be given to a job's handler class to tweak its behavior
     """
 
+    handler_options: dict
+    """Various options directly passed to the job's handler class"""
     descendants: typing.List[DownloadJob]
     """List of follow-up jobs in case of errors, if available"""
-    _user_agent: str
-    """User-agent string used to query the remote server"""
 
-    def __init__(self, job: DownloadJob, user_agent: str):
+    def __init__(self, job: DownloadJob, handler_options: dict):
         self.job = job
         self.logger = job.logger
+        self.handler_options = handler_options
         self.descendants = []
-        self._user_agent = user_agent
