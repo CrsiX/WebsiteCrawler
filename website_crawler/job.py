@@ -73,7 +73,7 @@ class DownloadJob:
     # Information about the state of the processing (specifically the content handling)
     handler: typing.List[typing.Type[BaseContentHandler]]
     """Collection of analyzers/handlers of the content, identified by the mime type"""
-    references: typing.Dict[str, typing.Set[str]]
+    references: typing.Set[str]
     """Storage of references found in the analyzed response, grouped by type of analyzer"""
     soup: typing.Optional[bs4.BeautifulSoup]
     """BeautifulSoup object containing the tree of the HTML response, if available"""
@@ -151,7 +151,7 @@ class DownloadJob:
         self.response_type = None
 
         self.handler = handler
-        self.references = {}
+        self.references = set()
         self.soup = None
 
         self.local_base = local_base

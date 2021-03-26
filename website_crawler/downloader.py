@@ -182,7 +182,6 @@ class Downloader:
             logging.getLogger(f"runner{ident}"),
             self.queue_access_timeout,
             self.crash_on_error,
-            ALL_DEFAULT_HANDLER_CLASSES,
             {}
         )
 

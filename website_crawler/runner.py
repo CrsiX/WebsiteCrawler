@@ -7,6 +7,7 @@ import logging
 import typing
 
 from . import processor
+from .job import JobQueue
 
 
 class Runner:
@@ -14,7 +15,7 @@ class Runner:
     Runner built to start processors on download jobs in parallel
     """
 
-    job_queue: queue.Queue
+    job_queue: JobQueue
     """Reference to the 'queue' attribute of the 'Downloader' object"""
     queue_access_timeout: float
     """Timeout when accessing the queue in seconds"""
@@ -41,7 +42,7 @@ class Runner:
 
     def __init__(
             self,
-            job_queue: queue.Queue,
+            job_queue: JobQueue,
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
@@ -76,6 +77,8 @@ class Runner:
                     self.state = 5
                 continue
 
+            current_job.logger = self.logger
+
             try:
                 worker = processor.DownloadProcessor(current_job, self.handler_options)
                 if worker.run():
@@ -87,8 +90,8 @@ class Runner:
                 if len(worker.descendants) > 0:
                     self.logger.warning(f"Found {len(worker.descendants)} new derived jobs.")
 
-                for item in set(current_job.references):
-                    self.job_queue.put(item)
+                for reference in set(current_job.references):
+                    self.job_queue.put(current_job.copy(reference))
 
             except Exception as exc:
                 self.exception = exc
