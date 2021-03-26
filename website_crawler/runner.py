@@ -97,4 +97,6 @@ class Runner:
                     self.state = 4
                     raise
 
+            self.job_queue.task_done()
+
         self.state = 3

@@ -3,6 +3,7 @@ Description of a single job
 """
 
 import os
+import queue
 import typing
 import logging
 import urllib.parse
@@ -10,6 +11,7 @@ import urllib.parse
 import bs4
 import requests
 
+from handler import BaseContentHandler
 from constants import DEFAULT_USER_AGENT_STRING
 
 
@@ -69,7 +71,7 @@ class DownloadJob:
     """Value of the HTTP header field 'Content-Type'"""
 
     # Information about the state of the processing (specifically the content handling)
-    handler: typing.Dict[str, typing.Callable[["DownloadJob"], bool]]
+    handler: typing.List[typing.Type[BaseContentHandler]]
     """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Dict[str, typing.Set[str]]
     """Storage of references found in the analyzed response, grouped by type of analyzer"""
@@ -123,7 +125,7 @@ class DownloadJob:
             remote: typing.Union[str, urllib.parse.ParseResult],
             local_base: str,
             logger: logging.Logger,
-            handler: typing.Dict[str, typing.Callable[["DownloadJob"], bool]],
+            handler: typing.List[typing.Type[BaseContentHandler]],
             **kwargs
     ):
 
@@ -200,3 +202,39 @@ class DownloadJob:
             self.logger,
             self.handler.copy()
         )
+
+
+class JobQueue(queue.Queue):
+    """
+    FIFO queue keeping track of download jobs
+
+    Note that the only difference between this queue and
+    the default queue (its superclass) is the type of
+    objects that should be managed by an instance of it.
+    """
+
+    def __init__(self, maxsize: int = 0):
+        super().__init__(maxsize)
+
+    def get(self, block: bool = True, timeout: float = None) -> DownloadJob:
+        """
+        Remove and return an item from the queue
+
+        Works exactly like the default get() call but
+        adds type annotations for the returned value.
+        """
+
+        return super().get(block, timeout)
+
+    def put(self, item: DownloadJob, block: bool = True, timeout: float = None):
+        """
+        Put an item into the queue
+
+        Works exactly like the default put() call but
+        with an additional type check of the inserted item.
+        """
+
+        if not isinstance(item, DownloadJob):
+            raise TypeError(f"Expected DownloadJob, but got {type(item)}")
+
+        return super().put(item, block, timeout)

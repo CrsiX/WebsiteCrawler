@@ -3,13 +3,14 @@ Downloader for whole websites and all files belonging to it
 """
 
 import os
-import queue
 import typing
 import logging
 import threading
 import urllib.parse
 
+from .job import DownloadJob, JobQueue
 from .runner import Runner
+from .handler import ALL_DEFAULT_HANDLER_CLASSES
 from .constants import DEFAULT_USER_AGENT_STRING, DEFAULT_QUEUE_ACCESS_TIMEOUT
 
 
@@ -136,16 +137,7 @@ class Downloader:
 
         self._runners = {}
         self.downloads = {}
-        self.queue = queue.Queue()
-
-        # A runner's state may be one of the following five options:
-        # 0 -> the runner has just been created, it's not running yet
-        # 1 -> the runner is up and performing actual work
-        # 2 -> the runner is doing something, but it was requested to quit
-        # 3 -> the runner exited successfully
-        # 4 -> the runner crashed due to an exception
-        # 5 -> the runner skipped an iteration due to an empty queue (running)
-        self._runner_states = {}
+        self.queue: JobQueue = JobQueue()
 
         def _ident():
             n = 0
@@ -155,7 +147,12 @@ class Downloader:
 
         self._runner_ident = _ident()
 
-        self.queue.put(website)
+        self.queue.put(DownloadJob(
+            website,
+            target,
+            logging.getLogger("first-job"),  # should be overwritten by runner
+            ALL_DEFAULT_HANDLER_CLASSES
+        ))
         self.logger.debug("Initialized downloader.")
 
     def get_status(self) -> str:
@@ -185,6 +182,7 @@ class Downloader:
             logging.getLogger(f"runner{ident}"),
             self.queue_access_timeout,
             self.crash_on_error,
+            ALL_DEFAULT_HANDLER_CLASSES,
             {}
         )
 
