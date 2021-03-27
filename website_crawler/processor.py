@@ -282,5 +282,8 @@ class DownloadProcessor(BaseProcessor):
             local_path = os.path.join(local_path, "index.html")
         self.job.local_path = local_path
 
+        if not self.save():
+            self.logger.warning("Saving the final content failed.")
+
         self.job.finished = True
         return True

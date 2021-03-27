@@ -8,7 +8,7 @@ import typing
 import logging
 import urllib.parse
 
-import bs4
+# import bs4
 import requests
 
 from handler import BaseContentHandler
@@ -34,7 +34,7 @@ class DownloadJob:
         "response_type",
         "handler",
         "references",
-        "soup",
+        # "soup",
         "local_base",
         "local_path",
         "final_content",
@@ -68,15 +68,15 @@ class DownloadJob:
     response_code: typing.Optional[int]
     """HTTP response status code of the request, if available"""
     response_type: typing.Optional[str]
-    """Value of the HTTP header field 'Content-Type'"""
+    """Value of the HTTP header field 'Content-Type', if available"""
 
     # Information about the state of the processing (specifically the content handling)
     handler: typing.List[typing.Type[BaseContentHandler]]
     """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Set[str]
     """Storage of references found in the analyzed response, grouped by type of analyzer"""
-    soup: typing.Optional[bs4.BeautifulSoup]
-    """BeautifulSoup object containing the tree of the HTML response, if available"""
+    # soup: typing.Optional[bs4.BeautifulSoup]
+    # """BeautifulSoup object containing the tree of the HTML response, if available"""
 
     # Information about the local side
     local_base: str
@@ -152,7 +152,7 @@ class DownloadJob:
 
         self.handler = handler
         self.references = set()
-        self.soup = None
+        # self.soup = None
 
         self.local_base = local_base
         self.local_path = None
