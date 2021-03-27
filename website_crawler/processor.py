@@ -170,17 +170,117 @@ class DownloadProcessor(BaseProcessor):
 
     :param job: description of a single download job (will also be
         accessed in read-write manner to store various flags and data)
-    :param handler_options: dictionary of various options that will
-        be given to a job's handler class to tweak its behavior
+    :param options: dictionary of various options that will be given
+        to a job's handler class to tweak its behavior but might also
+        be used by the processor in the one way or the other (note that
+        none of those classes should rely on any value to be present)
     """
 
-    handler_options: dict
-    """Various options directly passed to the job's handler class"""
+    options: dict
+    """Various options used to alter the job's processing and analyze"""
     descendants: typing.List[DownloadJob]
     """List of follow-up jobs in case of errors, if available"""
 
-    def __init__(self, job: DownloadJob, handler_options: dict):
+    def __init__(self, job: DownloadJob, options: dict):
         self.job = job
         self.logger = job.logger
-        self.handler_options = handler_options
+        self.options = options
         self.descendants = []
+
+    def run(self) -> bool:
+        """
+        Perform the actual work as a blocking process
+
+        :return: True if all operations completed successfully, False otherwise
+            (the job's attribute `exception` might hold more details about the
+            error; the processor's attribute `descendants` might hold follow-up
+            jobs that could be used instead to fix this error, if possible)
+        """
+
+        if self.job.started:
+            self.logger.warning(f"{self.job} has already been started. Parallel access?")
+        self.job.started = True
+
+        self.logger.debug(f"Currently processing: {self.job.remote_path}")
+        try:
+            self.job.response = requests.get(
+                self.job.remote_path,
+                headers={"User-Agent": self.job.user_agent}
+            )
+
+        # Catch SSL errors and eventually try to fetch the resource via HTTP again
+        except requests.exceptions.SSLError as exc:
+            self.job.exception = exc
+            msg = f"SSL Error: {exc} (while fetching {self.job})"
+            if self.job.https_mode == 3 and self.job.remote_url.scheme == "https":
+                self.descendants.append(
+                    self.job.copy(self.job.remote_url._replace(scheme="http"))
+                )
+                self.logger.warning(msg)
+            else:
+                self.logger.error(msg)
+            return False
+
+        self.job.response_code = self.job.response.status_code
+
+        # Abort further operation on failed response
+        if self.job.response_code != 200:
+            self.logger.error(
+                f"Received code {self.job.response_code} "
+                f"for {self.job.remote_path}. Skipping."
+            )
+            self.job.delayed = True
+            return False
+
+        # Determine the content type of the response
+        for header in self.job.response.headers:
+            if header.lower() == "content-type":
+                self.job.response_type = self.job.response.headers[header]
+
+        # Determine the correct handler class and analyze the content
+        handler_class = None
+        for handler_class in self.job.handler:
+            if handler_class.accepts(self.job.response_type):
+                self.logger.debug(f"Using {handler_class} to analyze {self.job}")
+                content = handler_class.analyze(self.job, **self.options)
+                break
+        else:
+            self.logger.warning(f"No handler class found for {self.job}")
+            content = self.job.response.content
+
+        # Report problems that might have occurred after analyzing
+        if content is None:
+            self.logger.error("No file content available.")
+        elif not isinstance(content, (str, bytes)):
+            self.logger.error(f"Handler class returned type {type(content)}!")
+        if content is None or not isinstance(content, (str, bytes)):
+            self.logger.info(
+                "A handler class should either return str or bytes. "
+                "The error above indicates problems with the class "
+                f"{handler_class}. Please fix its analyze() class method."
+            )
+
+        # Determine the filename under which the content should be stored
+        path = self.job.remote_url.path
+        if self.options.get("ascii_only", False):
+            path = helper.convert_to_ascii_only(path, helper.SMALL_ASCII_CONVERSION_TABLE)
+        if self.options.get("lowered", False):
+            path = path.lower()
+        if path.startswith("/"):
+            path = path[1:]
+        if len(path) == "":
+            self.logger.warning("Empty path detected. Added 'index.html'!")
+            path = "index.html"
+
+        # Determine the full local filename (path) from the local base
+        local_path = os.path.join(self.job.local_base, path)
+        if local_path.endswith("/"):
+            self.logger.warning(
+                f"Added suffix 'index.html' because "
+                f"'{local_path}' ended with '/'!"
+            )
+            local_path = os.path.join(local_path, "index.html")
+        self.job.local_path = local_path
+
+        self.job.finished = True
+        return True
