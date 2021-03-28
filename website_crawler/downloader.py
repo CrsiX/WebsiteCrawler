@@ -11,7 +11,7 @@ import urllib.parse
 from .job import DownloadJob, JobQueue
 from .runner import Runner
 from .handler import ALL_DEFAULT_HANDLER_CLASSES
-from .constants import DEFAULT_USER_AGENT_STRING, DEFAULT_QUEUE_ACCESS_TIMEOUT
+from .constants import *
 
 
 class Downloader:
@@ -61,22 +61,22 @@ class Downloader:
             website: str,
             target: str,
             logger: logging.Logger,
-            https_mode: int = 0,
+            https_mode: int = DEFAULT_HTTPS_MODE,
             base_ref: typing.Optional[str] = None,
-            load_hyperlinks: bool = True,
-            load_css: bool = False,
-            load_js: bool = False,
-            load_image: bool = False,
-            rewrite_references: bool = False,
-            lowered: bool = False,
-            third_party: bool = False,
-            prettify: bool = False,
-            overwrite: bool = True,
-            ascii_only: bool = False,
-            user_agent: str = None,
-            unique_filenames: bool = False,
-            crash_on_error: bool = False,
-            queue_access_timeout: float = None
+            load_hyperlinks: bool = DEFAULT_INCLUDE_HYPERLINKS,
+            load_css: bool = DEFAULT_INCLUDE_STYLESHEETS,
+            load_js: bool = DEFAULT_INCLUDE_JAVASCRIPT,
+            load_image: bool = DEFAULT_INCLUDE_IMAGES,
+            rewrite_references: bool = DEFAULT_REWRITE_REFERENCES,
+            lowered: bool = DEFAULT_LOWERED_PATHS,
+            third_party: bool = DEFAULT_LOAD_THIRD_PARTY_RESOURCE,
+            prettify: bool = DEFAULT_HTML_OUTPUT_PRETTIFIED,
+            overwrite: bool = DEFAULT_ALLOW_OVERWRITING_FILES,
+            ascii_only: bool = DEFAULT_ASCII_ONLY_REFERENCES,
+            user_agent: str = DEFAULT_USER_AGENT_STRING,
+            unique_filenames: bool = DEFAULT_UNIQUE_FILENAMES,
+            crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
+            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT
     ):
         self.website = website
         self.target = target
@@ -94,12 +94,10 @@ class Downloader:
         self.prettify = prettify
         self.overwrite = overwrite
         self.ascii_only = ascii_only
-        self.user_agent = user_agent \
-            if user_agent is not None else DEFAULT_USER_AGENT_STRING
+        self.user_agent = user_agent
         self.unique_filenames = unique_filenames
         self.crash_on_error = crash_on_error
-        self.queue_access_timeout = queue_access_timeout \
-            if queue_access_timeout is not None else DEFAULT_QUEUE_ACCESS_TIMEOUT
+        self.queue_access_timeout = queue_access_timeout
 
         if self.base_ref is not None:
             self.logger.warning("Feature not fully supported yet: base_ref")
