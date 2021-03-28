@@ -28,7 +28,7 @@ class BaseContentHandler:
     Note that the handler should not set the `final_content` attribute.
 
     Additionally, subclasses must set the class variable MIME_TYPE
-    to indicate which mime types are support using `accept` method.
+    to indicate which mime types are support using `accepts` method.
     """
 
     MIME_TYPE: typing.ClassVar[typing.List[str]]
@@ -60,7 +60,14 @@ class HTMLContentHandler(BaseContentHandler):
         Analyze and edit the job's content, extracting potential new targets
 
         Supported keys in the `options` dictionary:
-        - TODO
+        - `ascii_only`
+        - `load_hyperlinks`
+        - `load_images`
+        - `load_javascript`
+        - `load_stylesheets`
+        - `lowered_paths`
+        - `prettify`
+        - `rewrite_references`
 
         :param job: the download job that should be handled and analyzed
         :param options: dictionary of additional options that alter the
