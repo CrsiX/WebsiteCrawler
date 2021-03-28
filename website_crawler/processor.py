@@ -5,6 +5,7 @@ TODO
 import os
 import typing
 import logging
+import mimetypes
 import urllib.parse
 
 import requests
@@ -173,6 +174,8 @@ class DownloadProcessor(BaseProcessor):
         for header in self.job.response.headers:
             if header.lower() == "content-type":
                 self.job.response_type = self.job.response.headers[header]
+        if self.job.response_type is None:
+            self.job.response_type, _ = mimetypes.guess_type(self.job.remote_path)
 
         # Determine the correct handler class and analyze the content
         handler_class = None
