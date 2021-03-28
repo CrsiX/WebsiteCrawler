@@ -37,18 +37,11 @@ class Runner:
     crash_on_error: bool
     """Determine whether to kill this runner when a processor throws an exception"""
 
-    # A runner's state may be one of the following five options:
-    # 0 -> the runner has just been created, it's not running yet
-    # 1 -> the runner is up and performing actual work
-    # 2 -> the runner is doing something, but it was requested to quit
-    # 3 -> the runner exited successfully
-    # 4 -> the runner crashed due to an exception
-    # 5 -> the runner skipped an iteration due to an empty queue (running)
     state: RunnerState
     """Current state of the runner"""
 
     handler_options: dict
-    """Dictionary of keyword arguments supplied to download handlers"""
+    """Dictionary of keyword arguments supplied to processors and handlers"""
 
     def __init__(
             self,
@@ -56,7 +49,7 @@ class Runner:
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
-            handler_options: dict = None
+            options: dict = None
     ):
         self.job_queue = job_queue
         self.logger = logger
@@ -66,9 +59,9 @@ class Runner:
         self.exception = None
         self.state = RunnerState.CREATED
 
-        self.handler_options = handler_options
-        if handler_options is None:
-            self.handler_options = {}
+        self.options = options
+        if options is None:
+            self.options = {}
 
     def run(self):
         """
