@@ -9,7 +9,7 @@ import urllib.parse
 
 import requests
 
-import helper
+from . import helper
 from .job import DownloadJob
 
 
@@ -179,7 +179,7 @@ class DownloadProcessor(BaseProcessor):
         for handler_class in self.job.handler:
             if handler_class.accepts(self.job.response_type):
                 self.logger.debug(f"Using {handler_class} to analyze {self.job}")
-                content = handler_class.analyze(self.job, **self.options)
+                content = handler_class.analyze(self.job, self.options)
                 break
         else:
             self.logger.warning(f"No handler class found for {self.job}")
@@ -196,6 +196,8 @@ class DownloadProcessor(BaseProcessor):
                 "The error above indicates problems with the class "
                 f"{handler_class}. Please fix its analyze() class method."
             )
+            content = b""
+        self.job.final_content = content
 
         # Determine the filename under which the content should be stored
         path = self.job.remote_url.path

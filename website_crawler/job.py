@@ -11,8 +11,8 @@ import urllib.parse
 # import bs4
 import requests
 
-from handler import BaseContentHandler
-from constants import DEFAULT_USER_AGENT_STRING
+from .handler import BaseContentHandler
+from .constants import DEFAULT_USER_AGENT_STRING
 
 
 class DownloadJob:

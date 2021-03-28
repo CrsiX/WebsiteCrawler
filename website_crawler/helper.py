@@ -3,7 +3,7 @@
 import typing
 import urllib.parse
 
-import constants
+from . import constants
 
 
 SMALL_ASCII_CONVERSION_TABLE = {

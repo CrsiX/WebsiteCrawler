@@ -7,8 +7,7 @@ import urllib.parse
 
 import bs4
 
-import helper
-import constants
+from . import helper, constants
 
 
 class BaseContentHandler:
@@ -32,7 +31,7 @@ class BaseContentHandler:
     """
 
     MIME_TYPE: typing.ClassVar[typing.List[str]]
-    """Specifier the mime-type that can be analyzed by the specific handler class"""
+    """List of MIME types that can be analyzed by the specific handler class"""
 
     @classmethod
     def accepts(cls, content_type: str) -> bool:
@@ -40,7 +39,9 @@ class BaseContentHandler:
         Determine whether the given content MIME type is accepted by the handler
         """
 
-        return content_type.lower() in map(lambda s: s.lower(), cls.MIME_TYPE)
+        return content_type.lower().split(";")[0].strip() in map(
+            lambda s: s.lower(), cls.MIME_TYPE
+        )
 
     @classmethod
     def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
@@ -74,6 +75,8 @@ class HTMLContentHandler(BaseContentHandler):
             handling of the job in various different ways
         :return: the content of the file that should be written to disk
         """
+
+        # TODO: add/ensure support for non-default charsets (HTTP header field)
 
         def get_relative_path(ref: str) -> str:
             """
