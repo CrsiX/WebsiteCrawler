@@ -7,6 +7,9 @@ import typing
 import logging
 import urllib.parse
 
+import requests
+
+import helper
 from .job import DownloadJob
 
 
@@ -31,81 +34,15 @@ class BaseProcessor:
         """
         Transform the partly defined target string to a full URL
 
-        The implementation of this method is partly based
-        on RFC 3986, section 5.1 and 5.2 (with modifications).
-
-        :param target: anything that seems to be an URI, relative or absolute
-        :param base: optional base URI used to correctly find absolute paths
-            for relative resource indicators (uses the remote URL if absent)
-        :return: a full URL that can be used to request further resources,
-            if possible and the target matched the criteria (otherwise None)
+        See the `helper` module for the actual implementation of this method.
         """
 
-        def merge_paths(a: urllib.parse.ParseResult, b: str) -> str:
-            """
-            Merge two paths, where `a` should be a base and `b` should be a reference
-            """
-
-            if not b.startswith("/"):
-                b = "/" + b
-            if a.netloc != "" and a.path == "":
-                return b
-            return "/".join(a.path.split("/")[:-1]) + b
-
-        def remove_dot_segments(p: str) -> str:
-            """
-            Remove the dot segments of a path `p`
-            """
-
-            if "./" in p or "/." in p:
-                self.logger.warning("Feature not implemented: remove_dot_segments")
-            return p
-
-        url = urllib.parse.urlparse(target)
-        scheme, netloc, path, params, query, fragment = url
-
-        # TODO: section 5.1, order of precedence
-        if base is None:
-            base = self.job.remote_url
-
-        # Unknown schemes are ignored (e.g. mailto:) and a given schema indicates
-        # an absolute URL which should not be processed (only filtered)
-        if scheme != "" and scheme.lower() not in ("http", "https"):
-            return
-        elif scheme == "":
-            if self.job.https_mode == 0:
-                scheme = self.job.remote_url.scheme
-            elif self.job.https_mode == 1 or self.job.https_mode == 3:
-                scheme = "https"
-            elif self.job.https_mode == 2:
-                scheme = "http"
-        elif netloc != "" and netloc.lower() == self.job.netloc.lower():
-            return urllib.parse.urlunparse(
-                (scheme, netloc, remove_dot_segments(path), params, query, "")
-            )
-
-        # Other network locations are ignored (so we don't traverse the whole web)
-        if netloc != "" and netloc.lower() != self.job.netloc.lower():
-            return
-        elif netloc != "":
-            return urllib.parse.urlunparse(
-                (scheme, netloc, remove_dot_segments(path), params, query, "")
-            )
-
-        netloc = self.job.netloc
-
-        # Determine the new path
-        if path == "":
-            path = base.path
-            if query == "":
-                query = base.query
-        else:
-            if path.startswith("/"):
-                path = remove_dot_segments(path)
-            else:
-                path = remove_dot_segments(merge_paths(base, path))
-        return urllib.parse.urlunparse(
-            (scheme, netloc, remove_dot_segments(path), params, query, "")
+        return helper.find_absolute_reference(
+            target,
+            self.job.netloc,
+            self.job.remote_url,
+            self.job.https_mode,
+            base
         )
 
     def save(self) -> bool:
