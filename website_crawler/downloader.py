@@ -9,7 +9,7 @@ import threading
 import urllib.parse
 
 from .job import DownloadJob, JobQueue
-from .runner import Runner
+from .runner import Runner, RunnerState
 from .handler import ALL_DEFAULT_HANDLER_CLASSES
 from .constants import *
 
@@ -160,12 +160,19 @@ class Downloader:
         :return: comma separated string of key=value pairs
         """
 
+        dead_runners = len(list(filter(
+            lambda k: self._runners[k][0].state in (RunnerState.EXITED, RunnerState.CRASHED),
+            self._runners
+        )))
+        downloads_okay = len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))
+        downloads_doing = len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))
+
         return (
             f"runners_total={len(self._runners)},"
-            f"runners_dead={len(list(filter(lambda k: self._runners[k][0].state in (3, 4), self._runners)))},"
+            f"runners_dead={dead_runners},"
             f"downloads_total={len(self.downloads)},"
-            f"downloads_okay={len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))},"
-            f"downloads_doing={len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))},"
+            f"downloads_okay={downloads_okay},"
+            f"downloads_doing={downloads_doing},"
             f"queue_size={self.queue.qsize()}"
         )
 
@@ -201,8 +208,10 @@ class Downloader:
             self.logger.warning(f"Runner '{key}' couldn't be stopped: not found.")
             return False
 
-        self._runners[key][0].state = 2
-        self._runners[key][1].join(timeout=timeout)
+        runner, thread = self._runners[key]
+        if runner.state in (RunnerState.CREATED, RunnerState.WORKING, RunnerState.WAITING):
+            runner.state = RunnerState.ENDING
+        thread.join(timeout=timeout)
         return True
 
     def stop_all_runners(self) -> bool:
@@ -217,13 +226,15 @@ class Downloader:
 
         for key in self._runners:
             runner, thread = self._runners[key]
-            if runner.state in (0, 1, 5):
-                runner.state = 2
-                self.logger.debug(f"Set runner state of runner '{key}' -> 2")
-            elif runner.state == 3:
+            if runner.state in (RunnerState.CREATED, RunnerState.WORKING, RunnerState.WAITING):
+                runner.state = RunnerState.ENDING
+                self.logger.debug(f"Set runner state of runner '{key}' -> ENDING")
+            elif runner.state == RunnerState.EXITED:
                 self.logger.debug(f"Runner '{key}' seems to have already finished")
-            elif runner.state == 4:
+            elif runner.state == RunnerState.CRASHED:
                 self.logger.debug(f"Runner '{key}' seems to have already crashed")
+                if runner.exception is not None:
+                    self.logger.warning(f"{runner.exception} caused the crash")
 
         for key in self._runners:
             runner, thread = self._runners[key]
@@ -240,6 +251,11 @@ class Downloader:
         """
 
         return any(map(
-            lambda k: self._runners[k][0].state in (0, 1, 2),
+            lambda k: self._runners[k][0].state in (
+                RunnerState.CREATED,
+                RunnerState.WORKING,
+                RunnerState.WAITING,
+                RunnerState.ENDING
+            ),
             self._runners.keys()
         ))

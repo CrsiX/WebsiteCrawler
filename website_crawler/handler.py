@@ -136,10 +136,8 @@ class HTMLContentHandler(BaseContentHandler):
                     )
 
                     if target is not None:
-                        job.logger.debug(f"New target: {target}")
                         job.references.add(target)
                         relative_path = get_relative_path(target)
-                        job.logger.debug(f"Relative path: {relative_path}")
                         tag.attrs[attr_name] = relative_path
 
         def stylesheet_filter_func(tag: bs4.element.Tag) -> bool:

@@ -5,9 +5,19 @@ Runners triggering parallel job executions using processors
 import queue
 import logging
 import typing
+from enum import Enum, auto as _auto
 
 from . import processor
 from .job import JobQueue
+
+
+class RunnerState(Enum):
+    CREATED = _auto()  # the runner has just been created
+    WORKING = _auto()  # the runner processes jobs
+    WAITING = _auto()  # the runner waits for new jobs to be available
+    ENDING = _auto()   # the runner processes its last job
+    EXITED = _auto()   # the runner exited gracefully
+    CRASHED = _auto()  # the runner crashed due to unhandled exception
 
 
 class Runner:
@@ -34,7 +44,7 @@ class Runner:
     # 3 -> the runner exited successfully
     # 4 -> the runner crashed due to an exception
     # 5 -> the runner skipped an iteration due to an empty queue (running)
-    state: int
+    state: RunnerState
     """Current state of the runner"""
 
     handler_options: dict
@@ -54,7 +64,7 @@ class Runner:
         self.crash_on_error = crash_on_error
 
         self.exception = None
-        self.state = 0
+        self.state = RunnerState.CREATED
 
         self.handler_options = handler_options
         if handler_options is None:
@@ -66,15 +76,15 @@ class Runner:
         """
 
         self.logger.debug(f"Starting runner loop ...")
-        self.state = 1
+        self.state = RunnerState.WORKING
 
-        while self.state < 2 or self.state == 5:
+        while self.state in (RunnerState.WORKING, RunnerState.WAITING):
             try:
                 current_job = self.job_queue.get(True, self.queue_access_timeout)
-                self.state = 1
+                self.state = RunnerState.WORKING
             except queue.Empty:
-                if self.state < 2:
-                    self.state = 5
+                if self.state == RunnerState.WORKING:
+                    self.state = RunnerState.WAITING
                 continue
 
             current_job.logger = self.logger
@@ -97,9 +107,9 @@ class Runner:
                 self.exception = exc
                 self.logger.error(f"Error during handling of '{current_job}'!", exc_info=True)
                 if self.crash_on_error:
-                    self.state = 4
+                    self.state = RunnerState.CRASHED
                     raise
 
             self.job_queue.task_done()
 
-        self.state = 3
+        self.state = RunnerState.EXITED
