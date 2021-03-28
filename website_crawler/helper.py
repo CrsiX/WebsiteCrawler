@@ -3,6 +3,8 @@
 import typing
 import urllib.parse
 
+import constants
+
 
 SMALL_ASCII_CONVERSION_TABLE = {
     "ä": "ae",
@@ -57,7 +59,7 @@ def find_absolute_reference(
         target: str,
         domain: str,
         remote_url: urllib.parse.ParseResult,
-        https_mode: int,
+        https_mode: int = constants.DEFAULT_HTTPS_MODE,
         base: typing.Optional[urllib.parse.ParseResult] = None
 ) -> typing.Optional[str]:
     """
