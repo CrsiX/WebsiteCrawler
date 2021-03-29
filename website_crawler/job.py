@@ -322,16 +322,17 @@ class JobManager:
 
     def check(self, item: typing.Union[str, DownloadJob]) -> bool:
         """
-        Check whether a URL or download job has been reserved or processed
+        Check whether a URL or download job has not been reserved or processed yet
         """
 
         with self._lock:
             if self._full:
-                pass
-                pass
+                reserved_contains = item in self._reserved
+                storage_contains = item in self._storage.values()
             else:
-                pass
-            return item in self._reserved or item in self._storage
+                reserved_contains = item.remote_path in self._reserved
+                storage_contains = item.remote_path in self._storage.keys()
+            return not reserved_contains and not storage_contains
 
     def put(self, item: DownloadJob, timeout: float = None):
         """
@@ -349,14 +350,8 @@ class JobManager:
         if not isinstance(item, DownloadJob):
             raise TypeError(f"Expected DownloadJob, but got {type(item)}")
 
-        with self._lock:
-            if self._full:
-                reserved_contains = item in self._reserved
-                storage_contains = item in self._storage.values()
-            else:
-                reserved_contains = item.remote_path in self._reserved
-                storage_contains = item.remote_path in self._storage.keys()
-            if not reserved_contains and not storage_contains:
+        if self.check(item):
+            with self._lock:
                 return self._queue.put(item, True, timeout)
 
     def get(self, timeout: float = None) -> DownloadJob:
