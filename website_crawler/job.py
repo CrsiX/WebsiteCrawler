@@ -13,7 +13,11 @@ import urllib.parse
 import requests
 
 from .handler import BaseContentHandler
-from .constants import DEFAULT_USER_AGENT_STRING, DEFAULT_ACCEPTED_RESPONSE_CODES
+from .constants import (
+    DEFAULT_ACCEPTED_RESPONSE_CODES,
+    DEFAULT_JOB_MANAGER_FULL_MODE,
+    DEFAULT_USER_AGENT_STRING
+)
 
 
 class DownloadJob:
@@ -302,7 +306,11 @@ class JobManager:
     _reserved: typing.List[typing.Union[str, DownloadJob]]
     _successful: typing.List[int]
 
-    def __init__(self, full: bool = False, successful: typing.List[int] = None):
+    def __init__(
+            self,
+            full: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
+            successful: typing.List[int] = None
+    ):
         self._full = full
         self._lock = _thread.allocate_lock()
         self._queue = JobQueue()
