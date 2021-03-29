@@ -13,7 +13,7 @@ import urllib.parse
 import requests
 
 from .handler import BaseContentHandler
-from .constants import DEFAULT_USER_AGENT_STRING
+from .constants import DEFAULT_USER_AGENT_STRING, DEFAULT_ACCEPTED_RESPONSE_CODES
 
 
 class DownloadJob:
@@ -237,46 +237,175 @@ class JobQueue(queue.Queue):
         return super().put(item, block, timeout)
 
 
-class JobHistory:
-    _lock: _thread.LockType
-    _storage: typing.Dict[str, int]
-    _reserved: typing.List[str]
+class JobManager:
+    """
+    Pool storage and manager for all download jobs
 
-    def __init__(self):
+    An instance holds a standard FIFO queue for all pending
+    jobs, a list of currently 'reserved' slots which represent
+    the downloads currently in progress and a dictionary with
+    all results so far. The dictionary uses the remote URLs
+    (strings) as its keys and the values are either the HTTP
+    response codes for the remote URLs or the 'full' instance
+    of the DownloadJob. Which one of those values is used will
+    be determined at object initialization, using the boolean
+    parameter ``full`` to enable the storage of the DownloadJob.
+    Note that this might significantly increase memory usage
+    because a successful DownloadJob always caries the whole
+    final content that was also written to disk. You're better
+    off using this feature for debugging purposes only.
+
+    All methods make use of a instance-wide mutex to enable
+    thread-safe operations on the data. Note that this means
+    that a thread B may block until the mutex is released by
+    another thread A. This might only impact for really large
+    pools where a single operation takes significant time.
+
+    The typical workflow for interacting with this manager is
+    first adding new jobs to the pending queue using ``put()``.
+    Some time afterwards, a call to ``get()`` pops the job
+    that was inserted first (FIFO) and marks the remote URL
+    represented by the job as 'reserved'. Note that both
+    ``put`` and ``get`` work as you would expect from a normal
+    queue, e.g. the Empty exception may be thrown and it's
+    possible to specify explicit timeouts (always blocking mode).
+
+    A call to ``check()`` determines whether a given job is
+    already pending (in the queue), reserved (in the list) or
+    completed (in the dict). Remote URLs are also possible here.
+
+    After performing the work of processing a download job,
+    a runner should call the ``complete()`` method using the
+    job or its remote URL and the response code as argument(s).
+    This ensures proper handling of future downloads and
+    avoids duplicate downloads of identical resources.
+
+    An instance furthermore provides some read-only properties:
+     *  ``pending`` is the **estimated** number of pending jobs
+     *  ``reserved`` is the number of reserved slots
+     *  ``completed`` is the number of completed downloads,
+        regardless of success of failure
+     *  ``succeeded`` is the number of successful downloads only
+
+    :param full: determine whether to store full download jobs
+        in the storage dictionary or just the response code
+        (also applies to the list of reserved slots)
+    :param successful: list of HTTP response codes that are
+        considered 'successfully' completed (uses the default
+        DEFAULT_ACCEPTED_RESPONSE_CODES list if None)
+    """
+
+    _full: bool
+    _lock: _thread.LockType
+    _queue: JobQueue
+    _storage: typing.Dict[str, typing.Union[int, DownloadJob]]
+    _reserved: typing.List[typing.Union[str, DownloadJob]]
+    _successful: typing.List[int]
+
+    def __init__(self, full: bool = False, successful: typing.List[int] = None):
+        self._full = full
         self._lock = _thread.allocate_lock()
+        self._queue = JobQueue()
         self._storage = {}
         self._reserved = []
+        self._successful = successful
+        if successful is None:
+            self._successful = DEFAULT_ACCEPTED_RESPONSE_CODES
 
-    def reserve(self, key: str):
+    def check(self, item: typing.Union[str, DownloadJob]) -> bool:
         """
-        Reserve a URL to be processed soon
-        """
-
-        with self._lock:
-            self._reserved.append(key)
-
-    def check(self, key: str) -> bool:
-        """
-        Check whether a URL has been reserved or processed
+        Check whether a URL or download job has been reserved or processed
         """
 
         with self._lock:
-            return key in self._reserved or key in self._storage
+            if self._full:
+                pass
+                pass
+            else:
+                pass
+            return item in self._reserved or item in self._storage
 
-    def complete(self, key: str, value: int):
+    def put(self, item: DownloadJob, timeout: float = None):
         """
-        Mark a eventually previously reserved URL as processed
+        Put a new download job into the queue of pending jobs
+
+        It's ensured that the new download job wasn't already processed.
+        However, the pending queue might contain duplicate jobs.
+        The method uses a blocking call to the underlying queue object.
+
+        :param item: new download job that should be added to the queue
+        :param timeout: optional timeout for the queue operation
+        :raises TypeError: if no DownloadJob instance was given as item
+        """
+
+        if not isinstance(item, DownloadJob):
+            raise TypeError(f"Expected DownloadJob, but got {type(item)}")
+
+        with self._lock:
+            if self._full:
+                reserved_contains = item in self._reserved
+                storage_contains = item in self._storage.values()
+            else:
+                reserved_contains = item.remote_path in self._reserved
+                storage_contains = item.remote_path in self._storage.keys()
+            if not reserved_contains and not storage_contains:
+                return self._queue.put(item, True, timeout)
+
+    def get(self, timeout: float = None) -> DownloadJob:
+        """
+        Remove and return a job from the queue, marking it 'reserved'
+
+        :param timeout: optional timeout for the queue operation
+        :raises queue.Empty: if the queue of pending jobs is empty
         """
 
         with self._lock:
-            if key in self._reserved:
-                self._reserved.remove(key)
-            self._storage[key] = value
+            item = self._queue.get(True, timeout)
+            if self._full:
+                self._reserved.append(item)
+            else:
+                self._reserved.append(item.remote_path)
+            return item
+
+    def complete(self, item: typing.Union[str, DownloadJob], value: int = None):
+        """
+        Mark a previously reserved job or URL as processed
+
+        :param item: job or remote URL that has been processed
+        :param value: HTTP response code for the job (ignored for items
+            of type DownloadJob, required for items of type str)
+        :raises ValueError: when no value is present for an item of type str
+        """
+
+        if isinstance(item, str) and not isinstance(value, int):
+            raise ValueError("Value required for items of type str")
+        if self._full and not isinstance(item, DownloadJob):
+            raise TypeError("Item must be type DownloadJob for 'full' storage mode")
+
+        with self._lock:
+            if item in self._reserved:
+                self._reserved.remove(item)
+            if isinstance(item, DownloadJob):
+                if self._full:
+                    self._storage[item.remote_path] = item
+                else:
+                    self._storage[item.remote_path] = item.response_code
+            else:
+                self._storage[item] = value
+            self._queue.task_done()
+
+    @property
+    def pending(self) -> int:
+        """
+        Get the estimated number of pending jobs in the queue
+        """
+
+        return self._queue.qsize()
 
     @property
     def reserved(self) -> int:
         """
-        Get the number of reserved remote locations
+        Get the number of reserved 'slots'
         """
 
         with self._lock:
@@ -292,31 +421,49 @@ class JobHistory:
             return len(self._storage)
 
     @property
-    def known(self) -> typing.List[str]:
+    def succeeded(self) -> int:
         """
-        Get a list of all currently known remote URLs
-        """
-
-        with self._lock:
-            return self._reserved[:] + list(self._storage.keys())
-
-    def filter(self, func: typing.Callable[[int], bool]) -> typing.Iterator[str]:
-        """
-        Return all keys whose values satisfy the given filter function
+        Get the number of successfully completed downloads
         """
 
         with self._lock:
-            return filter(lambda k: func(self._storage[k]), self._storage.keys())
+            return len(list(filter(
+                lambda k: self._storage[k] in self._successful,
+                self._storage.keys()
+            )))
+
 
     def dumps(self, **kwargs) -> str:
         """
-        Serialize the history to a JSON-formatted string
+        Serialize the whole manager to a JSON-formatted string
 
-        This method passes all keyword arguments to `json.dumps`.
+        This method passes all keyword arguments to ``json.dumps``!
         """
 
         with self._lock:
+            try:
+                pending = list(self._queue.queue)
+            except TypeError:
+                pending = []
+                try:
+                    while True:
+                        pending.append(self._queue.get())
+                except queue.Empty:
+                    pass
+                for job in pending:
+                    self._queue.put(job)
+                    self._queue.task_done()
+            pending = list(map(lambda j: j.remote_path, pending))
+
+            completed = self._storage
+            if self._full:
+                completed = {k: self._storage[k].response_code for k in self._storage}
+
             return json.dumps(
-                {"reserved": self._reserved, "completed": self._storage},
+                {
+                    "pending": pending,
+                    "reserved": self._reserved,
+                    "completed": completed
+                },
                 **kwargs
             )
