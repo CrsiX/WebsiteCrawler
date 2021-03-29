@@ -8,7 +8,7 @@ import logging
 import threading
 import urllib.parse
 
-from .job import DownloadJob, JobQueue
+from .job import DownloadJob, JobManager
 from .runner import Runner, RunnerState
 from .handler import ALL_DEFAULT_HANDLER_CLASSES
 from .constants import *
@@ -76,7 +76,9 @@ class Downloader:
             user_agent: str = DEFAULT_USER_AGENT_STRING,
             unique_filenames: bool = DEFAULT_UNIQUE_FILENAMES,
             crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
-            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT
+            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT,
+            manager_debug_mode: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
+            **kwargs
     ):
         self.website = website
         self.target = target
@@ -133,9 +135,7 @@ class Downloader:
             self.logger.critical("Target directory is no directory!")
             raise RuntimeError("Target directory is no directory!")
 
-        self._runners = {}
-        self.downloads = {}
-        self.queue: JobQueue = JobQueue()
+        self.jobs: JobManager = JobManager(manager_debug_mode)
 
         def _ident():
             n = 0
@@ -143,9 +143,10 @@ class Downloader:
                 yield n
                 n += 1
 
-        self._runner_ident = _ident()
+        self._runners: typing.Dict[int, typing.Tuple[Runner, threading.Thread]] = {}
+        self._runner_ident: typing.Generator = _ident()
 
-        self.queue.put(DownloadJob(
+        self.jobs.put(DownloadJob(
             website,
             target,
             logging.getLogger("first-job"),  # should be overwritten by runner
@@ -164,16 +165,14 @@ class Downloader:
             lambda k: self._runners[k][0].state in (RunnerState.EXITED, RunnerState.CRASHED),
             self._runners
         )))
-        downloads_okay = len(list(filter(lambda x: self.downloads[x] == 200, self.downloads)))
-        downloads_doing = len(list(filter(lambda x: self.downloads[x] == 0, self.downloads)))
 
         return (
             f"runners_total={len(self._runners)},"
             f"runners_dead={dead_runners},"
-            f"downloads_total={len(self.downloads)},"
-            f"downloads_okay={downloads_okay},"
-            f"downloads_doing={downloads_doing},"
-            f"queue_size={self.queue.qsize()}"
+            f"completed_jobs={self.jobs.completed},"
+            f"successful_jobs={self.jobs.succeeded},"
+            f"reserved_jobs={self.jobs.reserved}"
+            f"pending_jobs={self.jobs.pending}"
         )
 
     def start_new_runner(self):
@@ -183,7 +182,7 @@ class Downloader:
 
         ident = next(self._runner_ident)
         runner = Runner(
-            self.queue,
+            self.jobs,
             logging.getLogger(f"runner{ident}"),
             self.queue_access_timeout,
             self.crash_on_error,

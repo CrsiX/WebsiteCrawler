@@ -8,7 +8,7 @@ import typing
 from enum import Enum, auto as _auto
 
 from . import processor
-from .job import JobQueue
+from .job import JobManager
 
 
 class RunnerState(Enum):
@@ -25,8 +25,8 @@ class Runner:
     Runner built to start processors on download jobs in parallel
     """
 
-    job_queue: JobQueue
-    """Reference to the 'queue' attribute of the 'Downloader' object"""
+    job_manager: JobManager
+    """Reference to the ``JobManager`` instance used by the ``Downloader`` object"""
     queue_access_timeout: float
     """Timeout when accessing the queue in seconds"""
 
@@ -45,13 +45,13 @@ class Runner:
 
     def __init__(
             self,
-            job_queue: JobQueue,
+            job_manager: JobManager,
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
             options: dict = None
     ):
-        self.job_queue = job_queue
+        self.job_manager = job_manager
         self.logger = logger
         self.queue_access_timeout = queue_access_timeout
         self.crash_on_error = crash_on_error
@@ -73,7 +73,7 @@ class Runner:
 
         while self.state in (RunnerState.WORKING, RunnerState.WAITING):
             try:
-                current_job = self.job_queue.get(True, self.queue_access_timeout)
+                current_job = self.job_manager.get(self.queue_access_timeout)
                 self.state = RunnerState.WORKING
             except queue.Empty:
                 if self.state == RunnerState.WORKING:
@@ -94,7 +94,7 @@ class Runner:
                     self.logger.warning(f"Found {len(worker.descendants)} new derived jobs.")
 
                 for reference in set(current_job.references):
-                    self.job_queue.put(current_job.copy(reference))
+                    self.job_manager.put(current_job.copy(reference))
 
             except Exception as exc:
                 self.exception = exc
@@ -103,6 +103,7 @@ class Runner:
                     self.state = RunnerState.CRASHED
                     raise
 
-            self.job_queue.task_done()
+            finally:
+                self.job_manager.complete(current_job)
 
         self.state = RunnerState.EXITED
