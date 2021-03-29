@@ -3,12 +3,13 @@ Description of a single job
 """
 
 import os
+import json
 import queue
 import typing
+import _thread
 import logging
 import urllib.parse
 
-# import bs4
 import requests
 
 from .handler import BaseContentHandler
@@ -34,7 +35,6 @@ class DownloadJob:
         "response_type",
         "handler",
         "references",
-        # "soup",
         "local_base",
         "local_path",
         "final_content",
@@ -75,8 +75,6 @@ class DownloadJob:
     """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Set[str]
     """Storage of references found in the analyzed response, grouped by type of analyzer"""
-    # soup: typing.Optional[bs4.BeautifulSoup]
-    # """BeautifulSoup object containing the tree of the HTML response, if available"""
 
     # Information about the local side
     local_base: str
@@ -152,7 +150,6 @@ class DownloadJob:
 
         self.handler = handler
         self.references = set()
-        # self.soup = None
 
         self.local_base = local_base
         self.local_path = None
@@ -238,3 +235,88 @@ class JobQueue(queue.Queue):
             raise TypeError(f"Expected DownloadJob, but got {type(item)}")
 
         return super().put(item, block, timeout)
+
+
+class JobHistory:
+    _lock: _thread.LockType
+    _storage: typing.Dict[str, int]
+    _reserved: typing.List[str]
+
+    def __init__(self):
+        self._lock = _thread.allocate_lock()
+        self._storage = {}
+        self._reserved = []
+
+    def reserve(self, key: str):
+        """
+        Reserve a URL to be processed soon
+        """
+
+        with self._lock:
+            self._reserved.append(key)
+
+    def check(self, key: str) -> bool:
+        """
+        Check whether a URL has been reserved or processed
+        """
+
+        with self._lock:
+            return key in self._reserved or key in self._storage
+
+    def complete(self, key: str, value: int):
+        """
+        Mark a eventually previously reserved URL as processed
+        """
+
+        with self._lock:
+            if key in self._reserved:
+                self._reserved.remove(key)
+            self._storage[key] = value
+
+    @property
+    def reserved(self) -> int:
+        """
+        Get the number of reserved remote locations
+        """
+
+        with self._lock:
+            return len(self._reserved)
+
+    @property
+    def completed(self) -> int:
+        """
+        Get the number of completed downloads, regardless of success
+        """
+
+        with self._lock:
+            return len(self._storage)
+
+    @property
+    def known(self) -> typing.List[str]:
+        """
+        Get a list of all currently known remote URLs
+        """
+
+        with self._lock:
+            return self._reserved[:] + list(self._storage.keys())
+
+    def filter(self, func: typing.Callable[[int], bool]) -> typing.Iterator[str]:
+        """
+        Return all keys whose values satisfy the given filter function
+        """
+
+        with self._lock:
+            return filter(lambda k: func(self._storage[k]), self._storage.keys())
+
+    def dumps(self, **kwargs) -> str:
+        """
+        Serialize the history to a JSON-formatted string
+
+        This method passes all keyword arguments to `json.dumps`.
+        """
+
+        with self._lock:
+            return json.dumps(
+                {"reserved": self._reserved, "completed": self._storage},
+                **kwargs
+            )

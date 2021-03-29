@@ -40,7 +40,7 @@ class Runner:
     state: RunnerState
     """Current state of the runner"""
 
-    handler_options: dict
+    options: dict
     """Dictionary of keyword arguments supplied to processors and handlers"""
 
     def __init__(
@@ -83,11 +83,11 @@ class Runner:
             current_job.logger = self.logger
 
             try:
-                worker = processor.DownloadProcessor(current_job, self.handler_options)
+                worker = processor.DownloadProcessor(current_job, self.options)
                 if worker.run():
                     self.logger.debug(f"Worker processed {current_job} successfully.")
                 else:
-                    self.logger.debug(f"Processing of {current_job} failed somehow.")
+                    self.logger.warning(f"Processing of {current_job} failed somehow.")
 
                 # TODO: handle derived jobs
                 if len(worker.descendants) > 0:
