@@ -107,6 +107,11 @@ class DownloadProcessor(BaseProcessor):
     downloaded data at some specific location on the local system
     and of course keeping track of all steps that have been done.
 
+    Supported keys in the `options` dictionary:
+     *  ``ascii_only``
+     *  ``lowered``
+     *  ``respect_redirects``
+
     :param job: description of a single download job (will also be
         accessed in read-write manner to store various flags and data)
     :param options: dictionary of various options that will be given

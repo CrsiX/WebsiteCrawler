@@ -14,7 +14,7 @@ class BaseContentHandler:
     """
     Base class for all variants of content handler classes
 
-    A subclass should implement the `analyze` class method which
+    A subclass should implement the ``analyze`` class method which
     is dedicated to actually handle the server's response.
     This method should accept two arguments, one being the download
     job itself while the other is a dictionary of options. Those
@@ -24,10 +24,10 @@ class BaseContentHandler:
     An actual implementation should document supported keys of course.
     The return value of that method should provide the complete and
     final content as it should be stored in the target file on disk.
-    Note that the handler should not set the `final_content` attribute.
+    Note that the handler should not set the ``final_content`` attribute.
 
     Additionally, subclasses must set the class variable MIME_TYPE
-    to indicate which mime types are support using `accepts` method.
+    to indicate which mime types are support using ``accepts`` method.
     """
 
     MIME_TYPE: typing.ClassVar[typing.List[str]]
@@ -88,15 +88,15 @@ class HTMLContentHandler(BaseContentHandler):
         """
         Analyze and edit the job's content, extracting potential new targets
 
-        Supported keys in the `options` dictionary:
-        - `ascii_only`
-        - `load_hyperlinks`
-        - `load_images`
-        - `load_javascript`
-        - `load_stylesheets`
-        - `lowered_paths`
-        - `prettify`
-        - `rewrite_references`
+        Supported keys in the ``options`` dictionary:
+         *  ``ascii_only``
+         *  ``load_hyperlinks``
+         *  ``load_images``
+         *  ``load_javascript``
+         *  ``load_stylesheets``
+         *  ``lowered_paths``
+         *  ``prettify``
+         *  ``rewrite_references``
 
         :param job: the download job that should be handled and analyzed
         :param options: dictionary of additional options that alter the
@@ -108,7 +108,7 @@ class HTMLContentHandler(BaseContentHandler):
 
         def get_relative_path(ref: str) -> str:
             """
-            Get the relative path pointing from the current file towards `ref`
+            Get the relative path pointing from the current file towards ``ref``
 
             :param ref: any kind of reference, but works best for absolute URLs
                 (therefore, one should better make it an absolute URL before)
@@ -141,8 +141,8 @@ class HTMLContentHandler(BaseContentHandler):
             will also be done in this method. Use the filter function to restrict
             the range of scanned and processed tags in the input file.
 
-            :param tag_type: type of HTML tag (e.g. `a` or `img`)
-            :param attr_name: attribute name for that tag (e.g. `href` or `src`)
+            :param tag_type: type of HTML tag (e.g. ``a`` or ``img``)
+            :param attr_name: attribute name for that tag (e.g. ``href`` or ``src``)
             :param filter_func: function which accepts exactly one parameter, one
                 single HTML tag, and determines whether this tag should be analyzed
                 (filtering and processing of URLs takes place after this filter, so
@@ -151,7 +151,6 @@ class HTMLContentHandler(BaseContentHandler):
 
             nonlocal job
             nonlocal soup
-            job.logger.debug(f"Specific tag {tag_type}, attr {attr_name}")
 
             for tag in soup.find_all(tag_type):
                 if tag.has_attr(attr_name) and filter_func(tag):
