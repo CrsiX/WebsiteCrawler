@@ -78,7 +78,7 @@ class DownloadJob:
     handler: typing.List[typing.Type[BaseContentHandler]]
     """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Set[str]
-    """Storage of references found in the analyzed response, grouped by type of analyzer"""
+    """Storage of referenced remote resources found in the analyzed response"""
 
     # Information about the local side
     local_base: str
@@ -184,6 +184,11 @@ class DownloadJob:
         if self.response_code is None:
             return f"DownloadJob<{self.remote_path}>()"
         return f"DownloadJob<{self.remote_path}>({self.response_code})"
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.remote_url._replace(fragment="") == other.remote_url._replace(fragment="")
 
     def copy(self, remote: typing.Union[str, urllib.parse.ParseResult, None] = None):
         """

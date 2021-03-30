@@ -3,8 +3,8 @@ Runners triggering parallel job executions using processors
 """
 
 import queue
-import logging
 import typing
+import logging
 from enum import Enum, auto as _auto
 
 from . import processor
@@ -89,9 +89,10 @@ class Runner:
                 else:
                     self.logger.warning(f"Processing of {current_job} failed somehow.")
 
-                # TODO: handle derived jobs
                 if len(worker.descendants) > 0:
                     self.logger.warning(f"Found {len(worker.descendants)} new derived jobs.")
+                for job in worker.descendants:
+                    self.job_manager.put(job)
 
                 for reference in set(current_job.references):
                     self.job_manager.put(current_job.copy(reference))
