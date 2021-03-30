@@ -35,6 +35,8 @@ class Runner:
     """Exception raised while processing a job, if available"""
     crash_on_error: bool
     """Determine whether to kill this runner when a processor throws an exception"""
+    quit_on_empty_queue: bool
+    """Determine whether to quit the runner loop when the queue becomes empty"""
 
     state: RunnerState
     """Current state of the runner"""
@@ -48,12 +50,14 @@ class Runner:
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
+            quit_on_empty_queue: bool = False,
             options: dict = None
     ):
         self.job_manager = job_manager
         self.logger = logger
         self.queue_access_timeout = queue_access_timeout
         self.crash_on_error = crash_on_error
+        self.quit_on_empty_queue = quit_on_empty_queue
 
         self.exception = None
         self.state = RunnerState.CREATED
@@ -77,6 +81,8 @@ class Runner:
             except queue.Empty:
                 if self.state == RunnerState.WORKING:
                     self.state = RunnerState.WAITING
+                if self.quit_on_empty_queue:
+                    self.state = RunnerState.ENDING
                 continue
 
             current_job.logger = self.logger
