@@ -171,7 +171,7 @@ class Downloader:
             f"runners_dead={dead_runners},"
             f"completed_jobs={self.jobs.completed},"
             f"successful_jobs={self.jobs.succeeded},"
-            f"reserved_jobs={self.jobs.reserved}"
+            f"reserved_jobs={self.jobs.reserved},"
             f"pending_jobs={self.jobs.pending}"
         )
 
@@ -253,7 +253,6 @@ class Downloader:
             lambda k: self._runners[k][0].state in (
                 RunnerState.CREATED,
                 RunnerState.WORKING,
-                RunnerState.WAITING,
                 RunnerState.ENDING
             ),
             self._runners.keys()
