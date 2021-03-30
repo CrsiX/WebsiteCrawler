@@ -216,7 +216,7 @@ def main(namespace: argparse.Namespace):
     logging_setup = {
         "level": level,
         "format": "{asctime} [{levelname}] {name}: {message}",
-        "datefmt": "%d.%m.%Y %H:%M",
+        "datefmt": "%d.%m.%Y %H:%M:%S",
         "style": "{"
     }
 
@@ -225,23 +225,15 @@ def main(namespace: argparse.Namespace):
     logging.basicConfig(**logging_setup)
 
     logger = logging.getLogger("crawler")
-    loader = website_crawler.construct_from_namespace(namespace, logger)
-    for i in range(namespace.threads):
-        loader.start_new_runner()
-
-    def _print_status():
-        while True:
-            time.sleep(namespace.status)
-            print(loader.get_status(), file=sys.stderr)
-
+    status = None
     if namespace.status > 0:
-        threading.Thread(target=_print_status, daemon=True).start()
+        status = (namespace.status, lambda *args: print(*args, file=sys.stderr))
 
-    while loader.is_running():
-        time.sleep(_MAIN_SLEEP_TIME)
-
-    loader.stop_all_runners()
-    logger.info("Finished.")
+    loader = website_crawler.construct_from_namespace(namespace, logger)
+    loader.run(
+        namespace.threads,
+        status
+    )
 
 
 if __name__ == "__main__":

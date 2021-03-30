@@ -326,6 +326,13 @@ class JobManager:
         if successful is None:
             self._successful = DEFAULT_ACCEPTED_RESPONSE_CODES
 
+    def join(self):
+        """
+        Block until all items in the pending queue have been gotten and processed
+        """
+
+        return self._queue.join()
+
     def check(self, item: typing.Union[str, DownloadJob]) -> bool:
         """
         Check whether a URL or download job has not been reserved or processed yet
@@ -392,8 +399,10 @@ class JobManager:
             raise TypeError("Item must be type DownloadJob for 'full' storage mode")
 
         with self._lock:
-            if item in self._reserved:
+            if self._full:
                 self._reserved.remove(item)
+            else:
+                self._reserved.remove(item.remote_path)
             if isinstance(item, DownloadJob):
                 if self._full:
                     self._storage[item.remote_path] = item

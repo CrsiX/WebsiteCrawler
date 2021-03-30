@@ -5,10 +5,10 @@ WebsiteCrawler: a deep website cloning tool
 from logging import Logger as _Logger
 from argparse import Namespace as _Namespace
 
-from .downloader import Downloader
+from .downloader import DefaultDownloader
 
 
-def construct_from_namespace(namespace: _Namespace, logger: _Logger) -> Downloader:
+def construct_from_namespace(namespace: _Namespace, logger: _Logger) -> DefaultDownloader:
     """
     Construct a new Downloader instance from a Namespace object
 
@@ -26,9 +26,10 @@ def construct_from_namespace(namespace: _Namespace, logger: _Logger) -> Download
     elif namespace.https_first:
         https_mode = 3
 
-    return Downloader(
+    # TODO: new signature
+    return DefaultDownloader(
         website=namespace.website,
-        target=namespace.target,
+        target_directory=namespace.target,
         logger=logger,
         https_mode=https_mode,
         base_ref=namespace.base_ref,

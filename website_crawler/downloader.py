@@ -14,128 +14,146 @@ from .handler import ALL_DEFAULT_HANDLER_CLASSES
 from .constants import *
 
 
-class Downloader:
+# Better don't try to actively use this class,
+# it only provides some attribute annotations
+# and a constructor for the derived classes below.
+class _BaseDownloader:
     """
-    Downloader for website content, filtering duplicates, extracting more targets
-
     :param website: base URI of the website which should be downloaded
-    :param target: target directory where to store downloaded files
+    :param target_directory: target directory where to store downloaded files
     :param logger: logger used to keep track of various events
-    :param https_mode: whether to enforce or reject HTTPS connections
-        (valid values are 0: don't do anything, 1: enforce HTTPS, 2: enforce HTTP;
-        3: try HTTPS first, but fall back to using HTTP if errors occur; note
-        that web servers might forward HTTP to HTTPS by default using 301 responses)
-    :param base_ref: string for the `base` HTML tag (if it's None or an empty string,
-        the `base` tag will be removed, if it exists; otherwise, the specified value
-        will be used to build a new `base` tag to allow forming of relative paths)
-    :param load_hyperlinks: determine whether HTML files from `a` tags should be loaded
-    :param load_css: determine whether CSS files from `style` tags should be loaded
-    :param load_js: determine whether JavaScript files from `script` tags should be loaded
-    :param load_image: determine whether image files from `img` tags should be loaded
-    :param rewrite_references: determine whether references to other pages on the same
-        site should be rewritten (e.g. absolute links in `a` tags will now be relative
-        links that will probably work with your downloaded files); this procedure
-        will be applied to all downloaded files if enabled (e.g. also CSS or JS files)
-    :param lowered: determine whether all paths and all references should be converted
-        to lowercase characters, fixing errors of file systems not ignoring uppercase
-        (this will only be used when `rewrite_references` is also set to True)
-    :param third_party: determine whether resources from third parties should be loaded too
-    :param prettify: switch to enable prettifying the resulting HTML file to improve
-        the file's readability (but may also introduce whitespace errors)
-    :param overwrite: allow overwriting existing files (default: True)
-    :param ascii_only: use ASCII chars in link and file names only (all other
-        chars will be replaced with suitable characters or the underscore)
-    :param user_agent: use a custom user agent string for HTTP(S) requests
-    :param unique_filenames: use unique filenames for all files stored on disk
-        (fixes problems in case files have the same name but differ in lowercase
-        and uppercase or when ASCII-only filenames are requested, because the
-        "unique" filename will only contain ASCII characters of course)
     :param crash_on_error: worker threads will crash when they encounter unexpected
         problems (otherwise, they would send the traceback to stdout and continue)
     :param queue_access_timeout: timeout to access the queue in seconds (higher
         values potentially decrease load but may also negatively affect speed)
+    :param manager_debug_mode: whether to store the full download job in the
+        history or just the HTTP response code (heavily increased memory usage)
     """
+
+    jobs: JobManager
+    logger: logging.Logger
+    website: str
+
+    _options: typing.Dict[str, typing.Any]
+    _crash_on_error: bool
+    _queue_access_timeout: float
 
     def __init__(
             self,
             website: str,
-            target: str,
+            target_directory: str,
             logger: logging.Logger,
-            https_mode: int = DEFAULT_HTTPS_MODE,
-            base_ref: typing.Optional[str] = None,
-            load_hyperlinks: bool = DEFAULT_INCLUDE_HYPERLINKS,
-            load_css: bool = DEFAULT_INCLUDE_STYLESHEETS,
-            load_js: bool = DEFAULT_INCLUDE_JAVASCRIPT,
-            load_image: bool = DEFAULT_INCLUDE_IMAGES,
-            rewrite_references: bool = DEFAULT_REWRITE_REFERENCES,
-            lowered: bool = DEFAULT_LOWERED_PATHS,
-            third_party: bool = DEFAULT_LOAD_THIRD_PARTY_RESOURCE,
-            prettify: bool = DEFAULT_HTML_OUTPUT_PRETTIFIED,
-            overwrite: bool = DEFAULT_ALLOW_OVERWRITING_FILES,
-            ascii_only: bool = DEFAULT_ASCII_ONLY_REFERENCES,
-            user_agent: str = DEFAULT_USER_AGENT_STRING,
-            unique_filenames: bool = DEFAULT_UNIQUE_FILENAMES,
             crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
             queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT,
             manager_debug_mode: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
             **kwargs
     ):
         self.website = website
-        self.target = target
         self.logger = logger
 
-        self.https_mode = https_mode
-        self.base_ref = base_ref
-        self.load_hyperlinks = load_hyperlinks
-        self.load_css = load_css
-        self.load_js = load_js
-        self.load_image = load_image
-        self.rewrite_references = rewrite_references
-        self.lowered = lowered
-        self.third_party = third_party
-        self.prettify = prettify
-        self.overwrite = overwrite
-        self.ascii_only = ascii_only
-        self.user_agent = user_agent
-        self.unique_filenames = unique_filenames
-        self.crash_on_error = crash_on_error
-        self.queue_access_timeout = queue_access_timeout
+        self._options = kwargs
+        self._crash_on_error = crash_on_error
+        self._queue_access_timeout = queue_access_timeout
 
-        if self.base_ref is not None:
-            self.logger.warning("Feature not fully supported yet: base_ref")
-            self.logger.info("The `base` tag will always be removed, if available.")
-        if not self.rewrite_references and self.lowered:
-            self.logger.info("Feature disabled: lowered")
-            self.lowered = False
-        if self.third_party:
-            self.logger.warning("Feature not supported yet: third_party")
-        if not self.rewrite_references and self.unique_filenames:
-            self.logger.warning("Feature disabled: unique_filenames")
-            self.unique_filenames = False
-        if self.unique_filenames:
-            self.logger.warning("Feature not supported yet: unique_filenames")
+        if urllib.parse.urlparse(self.website).netloc == "":
+            self.logger.error("Empty network location! Further operation might fail.")
 
-        self.netloc = urllib.parse.urlparse(self.website).netloc
-        if self.netloc == "":
-            self.logger.error("Empty net location! Further operation might fail.")
-
-        if https_mode not in (0, 1, 2, 3):
-            self.logger.error(f"Unknown https mode detected: {https_mode}")
-            self.logger.warning("Set https mode to default value.")
-            self.https_mode = 0
-        elif https_mode == 3:
-            self.logger.warning("Feature not supported yet: https_mode=3")
-            self.logger.warning("Set https mode to default value.")
-            self.https_mode = 0
-
-        if not os.path.exists(target):
-            os.makedirs(target, exist_ok=True)
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory, exist_ok=True)
             self.logger.debug("Created missing target directory.")
-        elif not os.path.isdir(target):
+        elif not os.path.isdir(target_directory):
             self.logger.critical("Target directory is no directory!")
             raise RuntimeError("Target directory is no directory!")
 
-        self.jobs: JobManager = JobManager(manager_debug_mode)
+        self.jobs = JobManager(manager_debug_mode)
+        self.jobs.put(DownloadJob(
+            website,
+            target_directory,
+            logging.getLogger("first-job"),  # should be overwritten by runner
+            ALL_DEFAULT_HANDLER_CLASSES
+        ))
+
+    # A subclass should implement this method, depending on
+    # the exact handling of the runner(s) used by the class.
+    def run(self, **kwargs) -> bool:
+        raise NotImplementedError
+
+
+class SingleThreadedDownloader(_BaseDownloader):
+    __doc__ = """
+    Downloader for linked website content
+
+    This class provides a convenient control wrapper around
+    runners, processors and analyzers. It was designed to be
+    used in a single-threaded environment and works using
+    a single blocking process. This allows for easier debugging
+    and improves performance for very small websites, but it
+    might not be the tool you were looking for, especially for
+    larger sites with dozens of resources or slow remote servers.
+    """ + _BaseDownloader.__doc__
+
+    def run(self, **kwargs) -> bool:
+        """
+        Start the runner to download all content and wait for it to finish
+
+        This is a blocking method call. It may take a lot
+        of time for the method to finish operation properly.
+
+        :param kwargs: keyword arguments are silently **ignored**
+        :return: success of the operation
+        """
+
+        runner = Runner(
+            self.jobs,
+            logging.getLogger("runner"),
+            self._queue_access_timeout,
+            self._crash_on_error,
+            True,
+            self._options
+        )
+        self.logger.debug("Starting runner...")
+        runner.run()
+        return True
+
+
+class MultiThreadedDownloader(_BaseDownloader):
+    __doc__ = """
+    Downloader for linked website content
+
+    This class provides a convenient control wrapper around
+    runners, processors and analyzers. It was designed to be
+    used in a multi-threaded environment. If you want a single
+    blocking process, use the ``SingleThreadedDownloader``
+    class instead. Note, however, that certain runner control
+    methods are not present in that class. The provided
+    ``run()`` method might be used if you don't care about
+    the exact handling of the runners and just want to get
+    your job done instead. Note that that's yet another
+    blocking process (but you may use it in your main thread).
+    """ + _BaseDownloader.__doc__
+
+    _runners: typing.Dict[int, typing.Tuple[Runner, threading.Thread]]
+    _runners_ident: typing.Generator
+
+    def __init__(
+            self,
+            website: str,
+            target_directory: str,
+            logger: logging.Logger,
+            crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
+            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT,
+            manager_debug_mode: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
+            **kwargs
+    ):
+        super().__init__(
+            website,
+            target_directory,
+            logger,
+            crash_on_error,
+            queue_access_timeout,
+            manager_debug_mode,
+            **kwargs
+        )
 
         def _ident():
             n = 0
@@ -146,13 +164,58 @@ class Downloader:
         self._runners: typing.Dict[int, typing.Tuple[Runner, threading.Thread]] = {}
         self._runner_ident: typing.Generator = _ident()
 
-        self.jobs.put(DownloadJob(
-            website,
-            target,
-            logging.getLogger("first-job"),  # should be overwritten by runner
-            ALL_DEFAULT_HANDLER_CLASSES
-        ))
-        self.logger.debug("Initialized downloader.")
+    def run(
+            self,
+            threads: int = DEFAULT_DOWNLOADER_THREAD_COUNT,
+            status: typing.Tuple[float, typing.Callable[[str], None]] = None,
+            **kwargs
+    ) -> bool:
+        """
+        Start <threads> runners and wait for it to finish
+
+        This is a blocking method call. It may take a lot
+        of time for the method to finish operation properly.
+        You don't have to use this method, as it will only
+        handle adding the runners and waiting for them to
+        finish their operation. It allows to send status
+        updates periodically, see the ``status`` parameter.
+
+        :param threads: number of runners that should be started
+        :param status: tuple of a float representing the time between
+            status updates and a function that collects the formatted
+            status information (e.g. ``print`` or ``logger.debug``);
+            the updates may be disabled using ``None``, an "empty"
+            collector function or a sleep time less or equal to zero
+        :param kwargs: other keyword arguments are silently **ignored**
+        :return: success of the operation
+        """
+
+        do_status_updates = threading.Lock()
+        do_status_updates.acquire()
+
+        def handle_status():
+            while not do_status_updates.acquire(timeout=status[0]):
+                status[1](self.get_status())
+            do_status_updates.release()
+
+        update_thread = None
+        if status is not None and status[0] > 0:
+            update_thread = threading.Thread(target=handle_status, daemon=True)
+            update_thread.start()
+
+        for _ in range(threads):
+            self.start_new_runner()
+
+        while self.is_running():
+            self.jobs.join()
+
+        self.stop_all_runners()
+        do_status_updates.release()
+        if update_thread is not None:
+            update_thread.join()
+        self.logger.info("Finished.")
+
+        return True
 
     def get_status(self) -> str:
         """
@@ -169,10 +232,10 @@ class Downloader:
         return (
             f"runners_total={len(self._runners)},"
             f"runners_dead={dead_runners},"
-            f"completed_jobs={self.jobs.completed},"
-            f"successful_jobs={self.jobs.succeeded},"
-            f"reserved_jobs={self.jobs.reserved},"
-            f"pending_jobs={self.jobs.pending}"
+            f"jobs_completed={self.jobs.completed},"
+            f"jobs_succeeded={self.jobs.succeeded},"
+            f"jobs_reserved={self.jobs.reserved},"
+            f"jobs_pending={self.jobs.pending}"
         )
 
     def start_new_runner(self):
@@ -184,9 +247,10 @@ class Downloader:
         runner = Runner(
             self.jobs,
             logging.getLogger(f"runner{ident}"),
-            self.queue_access_timeout,
-            self.crash_on_error,
-            {}
+            self._queue_access_timeout,
+            self._crash_on_error,
+            False,
+            self._options
         )
 
         thread = threading.Thread(target=runner.run, daemon=False)
@@ -257,3 +321,6 @@ class Downloader:
             ),
             self._runners.keys()
         ))
+
+
+DefaultDownloader = MultiThreadedDownloader
