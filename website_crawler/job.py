@@ -417,8 +417,7 @@ class JobManager:
         Get the number of reserved 'slots'
         """
 
-        with self._lock:
-            return len(self._reserved)
+        return len(self._reserved)
 
     @property
     def completed(self) -> int:
@@ -426,8 +425,7 @@ class JobManager:
         Get the number of completed downloads, regardless of success
         """
 
-        with self._lock:
-            return len(self._storage)
+        return len(self._storage)
 
     @property
     def succeeded(self) -> int:
@@ -435,12 +433,10 @@ class JobManager:
         Get the number of successfully completed downloads
         """
 
-        with self._lock:
-            return len(list(filter(
-                lambda k: self._storage[k] in self._successful,
-                self._storage.keys()
-            )))
-
+        return len(list(filter(
+            lambda k: self._storage[k] in self._successful,
+            self._storage.keys()
+        )))
 
     def dumps(self, **kwargs) -> str:
         """
