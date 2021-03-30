@@ -7,8 +7,7 @@ import typing
 import logging
 from enum import Enum, auto as _auto
 
-from . import processor
-from .job import JobManager
+from . import processor as _processor, job as _job
 
 
 class RunnerState(Enum):
@@ -25,7 +24,7 @@ class Runner:
     Runner built to start processors on download jobs in parallel
     """
 
-    job_manager: JobManager
+    job_manager: _job.JobManager
     """Reference to the ``JobManager`` instance used by the ``Downloader`` object"""
     queue_access_timeout: float
     """Timeout when accessing the queue in seconds"""
@@ -45,7 +44,7 @@ class Runner:
 
     def __init__(
             self,
-            job_manager: JobManager,
+            job_manager: _job.JobManager,
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
@@ -83,7 +82,7 @@ class Runner:
             current_job.logger = self.logger
 
             try:
-                worker = processor.DownloadProcessor(current_job, self.options)
+                worker = _processor.DownloadProcessor(current_job, self.options)
                 if worker.run():
                     self.logger.debug(f"Worker processed {current_job} successfully.")
                 else:

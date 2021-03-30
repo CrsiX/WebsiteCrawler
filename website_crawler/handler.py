@@ -7,7 +7,7 @@ import urllib.parse
 
 import bs4
 
-from . import helper, constants
+from . import helper as _helper, constants as _constants
 
 
 class BaseContentHandler:
@@ -88,12 +88,12 @@ class HTMLContentHandler(BaseContentHandler):
             """
 
             path = urllib.parse.urlparse(ref).path
-            if options.get("ascii_only", constants.DEFAULT_ASCII_ONLY_REFERENCES):
-                path = helper.convert_to_ascii_only(
+            if options.get("ascii_only", _constants.DEFAULT_ASCII_ONLY_REFERENCES):
+                path = _helper.convert_to_ascii_only(
                     path,
-                    helper.SMALL_ASCII_CONVERSION_TABLE
+                    _helper.SMALL_ASCII_CONVERSION_TABLE
                 )
-            if options.get("lowered_paths", constants.DEFAULT_LOWERED_PATHS):
+            if options.get("lowered_paths", _constants.DEFAULT_LOWERED_PATHS):
                 path = path.lower()
             if path.startswith("/"):
                 path = path[1:]
@@ -127,7 +127,7 @@ class HTMLContentHandler(BaseContentHandler):
 
             for tag in soup.find_all(tag_type):
                 if tag.has_attr(attr_name) and filter_func(tag):
-                    target = helper.find_absolute_reference(
+                    target = _helper.find_absolute_reference(
                         tag.get(attr_name),
                         job.netloc,
                         job.remote_url,
@@ -171,20 +171,20 @@ class HTMLContentHandler(BaseContentHandler):
             soup.base.replace_with("")
 
         # Handle the various types of references, if enabled
-        if options.get("load_hyperlinks", constants.DEFAULT_INCLUDE_HYPERLINKS):
+        if options.get("load_hyperlinks", _constants.DEFAULT_INCLUDE_HYPERLINKS):
             handle_tag("a", "href", lambda x: True)
-        if options.get("load_stylesheets", constants.DEFAULT_INCLUDE_STYLESHEETS):
+        if options.get("load_stylesheets", _constants.DEFAULT_INCLUDE_STYLESHEETS):
             # TODO: add support for icons and scripts added by `link` tags
             handle_tag("link", "href", stylesheet_filter_func)
-        if options.get("load_javascript", constants.DEFAULT_INCLUDE_JAVASCRIPT):
+        if options.get("load_javascript", _constants.DEFAULT_INCLUDE_JAVASCRIPT):
             handle_tag("script", "src", lambda x: True)
-        if options.get("load_images", constants.DEFAULT_INCLUDE_IMAGES):
+        if options.get("load_images", _constants.DEFAULT_INCLUDE_IMAGES):
             handle_tag("img", "src", lambda x: True)
 
         # Determine the final content, based on the specified options
-        if options.get("prettify", constants.DEFAULT_HTML_OUTPUT_PRETTIFIED):
+        if options.get("prettify", _constants.DEFAULT_HTML_OUTPUT_PRETTIFIED):
             return soup.prettify()
-        if options.get("rewrite_references", constants.DEFAULT_REWRITE_REFERENCES):
+        if options.get("rewrite_references", _constants.DEFAULT_REWRITE_REFERENCES):
             return soup.decode()
         return job.response.text
 

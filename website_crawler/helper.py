@@ -3,7 +3,7 @@
 import typing
 import urllib.parse
 
-from . import constants
+from . import constants as _constants
 
 
 SMALL_ASCII_CONVERSION_TABLE = {
@@ -20,7 +20,7 @@ SMALL_ASCII_CONVERSION_TABLE = {
 def convert_to_ascii_only(
         string: str,
         mapping: dict = None,
-        fallback: str = "_"
+        fallback: str = _constants.DEFAULT_ASCII_REPLACEMENT_CHAR
 ) -> str:
     """
     Convert a string containing any kind of characters into an ASCII-only string
@@ -59,7 +59,7 @@ def find_absolute_reference(
         target: str,
         domain: str,
         remote_url: urllib.parse.ParseResult,
-        https_mode: int = constants.DEFAULT_HTTPS_MODE,
+        https_mode: int = _constants.DEFAULT_HTTPS_MODE,
         base: typing.Optional[urllib.parse.ParseResult] = None
 ) -> typing.Optional[str]:
     """

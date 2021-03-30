@@ -1,5 +1,7 @@
 """
-TODO
+Module containing processors which retrieve resources
+from the remote server and trigger the analyze using
+the correct handler classes, gathering new references
 """
 
 import os
@@ -10,8 +12,7 @@ import urllib.parse
 
 import requests
 
-from . import helper
-from .job import DownloadJob
+from . import helper as _helper, job as _job
 
 
 class BaseProcessor:
@@ -22,7 +23,7 @@ class BaseProcessor:
     implementation of correct processors easier.
     """
 
-    job: DownloadJob
+    job: _job.DownloadJob
     """Description of a job that should be processed, used in a read-write manner"""
     logger: logging.Logger
     """Processor's logger, should match the job's logger"""
@@ -38,7 +39,7 @@ class BaseProcessor:
         See the `helper` module for the actual implementation of this method.
         """
 
-        return helper.find_absolute_reference(
+        return _helper.find_absolute_reference(
             target,
             self.job.netloc,
             self.job.remote_url,
@@ -116,10 +117,10 @@ class DownloadProcessor(BaseProcessor):
 
     options: dict
     """Various options used to alter the job's processing and analyze"""
-    descendants: typing.List[DownloadJob]
+    descendants: typing.List[_job.DownloadJob]
     """List of follow-up jobs in case of errors, if available"""
 
-    def __init__(self, job: DownloadJob, options: dict):
+    def __init__(self, job: _job.DownloadJob, options: dict):
         self.job = job
         self.logger = job.logger
         self.options = options
@@ -205,7 +206,7 @@ class DownloadProcessor(BaseProcessor):
         # Determine the filename under which the content should be stored
         path = self.job.remote_url.path
         if self.options.get("ascii_only", False):
-            path = helper.convert_to_ascii_only(path, helper.SMALL_ASCII_CONVERSION_TABLE)
+            path = _helper.convert_to_ascii_only(path, _helper.SMALL_ASCII_CONVERSION_TABLE)
         if self.options.get("lowered", False):
             path = path.lower()
         if path.startswith("/"):

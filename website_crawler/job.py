@@ -1,5 +1,6 @@
 """
-Description of a single job
+Module containing the description of a single
+job and a manager to handle its states
 """
 
 import os
@@ -12,7 +13,7 @@ import urllib.parse
 
 import requests
 
-from .handler import BaseContentHandler
+from .handler import BaseContentHandler as _BaseContentHandler
 from .constants import (
     DEFAULT_ACCEPTED_RESPONSE_CODES,
     DEFAULT_JOB_MANAGER_FULL_MODE,
@@ -75,7 +76,7 @@ class DownloadJob:
     """Value of the HTTP header field 'Content-Type', if available"""
 
     # Information about the state of the processing (specifically the content handling)
-    handler: typing.List[typing.Type[BaseContentHandler]]
+    handler: typing.List[typing.Type[_BaseContentHandler]]
     """Collection of analyzers/handlers of the content, identified by the mime type"""
     references: typing.Set[str]
     """Storage of referenced remote resources found in the analyzed response"""
@@ -127,7 +128,7 @@ class DownloadJob:
             remote: typing.Union[str, urllib.parse.ParseResult],
             local_base: str,
             logger: logging.Logger,
-            handler: typing.List[typing.Type[BaseContentHandler]],
+            handler: typing.List[typing.Type[_BaseContentHandler]],
             **kwargs
     ):
 
