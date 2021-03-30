@@ -47,6 +47,34 @@ class BaseContentHandler:
     def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
         raise NotImplementedError
 
+    @classmethod
+    def _check_type(cls, job):
+        """
+        Raise a TypeError if job is no ``DownloadJob`` instance
+        """
+
+        # TODO: improve or remove type checking
+        if not any(map(lambda c: c.__name__ == "DownloadJob", type(job).mro())):
+            raise TypeError(f"Expected DownloadJob, got {type(job)}")
+
+
+class _DummyContentHandler(BaseContentHandler):
+    """
+    Dummy content handler returning the exact content without modification
+
+    A subclass must set the ``MIME_TYPES`` class attribute accordingly!
+    """
+
+    @classmethod
+    def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
+        cls._check_type(job)
+        job.logger.debug(f"{cls.__name__} doesn't implement analyze yet...")
+        return job.response.text
+
+
+class PlaintextContentHandler(_DummyContentHandler):
+    MIME_TYPE = ["text/plain"]
+
 
 class HTMLContentHandler(BaseContentHandler):
     """
@@ -152,9 +180,7 @@ class HTMLContentHandler(BaseContentHandler):
                     return True
             return False
 
-        # TODO: improve or remove type checking
-        if not any(map(lambda c: c.__name__ == "DownloadJob", type(job).mro())):
-            raise TypeError(f"Expected DownloadJob, got {type(job)}")
+        cls._check_type(job)
 
         # Extract the document's base URI
         base = None
@@ -189,6 +215,17 @@ class HTMLContentHandler(BaseContentHandler):
         return job.response.text
 
 
+class CSSContentHandler(_DummyContentHandler):
+    MIME_TYPE = ["text/css"]
+
+
+class JavaScriptContentHandler(_DummyContentHandler):
+    MIME_TYPE = ["application/javascript"]
+
+
 ALL_DEFAULT_HANDLER_CLASSES: typing.List[typing.Type[BaseContentHandler]] = [
-    HTMLContentHandler
+    PlaintextContentHandler,
+    HTMLContentHandler,
+    CSSContentHandler,
+    JavaScriptContentHandler
 ]
