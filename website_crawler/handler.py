@@ -189,6 +189,7 @@ class HTMLContentHandler(BaseContentHandler):
             base = soup.base.get("href")
             if urllib.parse.urlparse(base).netloc == "":
                 base = urllib.parse.urljoin(job.netloc, base)
+            base = urllib.parse.urlparse(base)
         job.logger.debug(f"Base: {job}")
 
         # Remove all `base` tags
