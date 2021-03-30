@@ -12,7 +12,7 @@ import urllib.parse
 
 import requests
 
-from . import helper as _helper, job as _job
+from . import constants as _constants, helper as _helper, job as _job
 
 
 class BaseProcessor:
@@ -158,6 +158,7 @@ class DownloadProcessor(BaseProcessor):
                 self.logger.warning(msg)
             else:
                 self.logger.error(msg)
+            self.job.delayed = True
             return False
 
         self.job.response_code = self.job.response.status_code
@@ -170,6 +171,24 @@ class DownloadProcessor(BaseProcessor):
             )
             self.job.delayed = True
             return False
+
+        # Adopt the new remote URL if there were some redirects
+        if len(self.job.response.history) > 0 and self.options.get(
+                "respect_redirects",
+                _constants.DEFAULT_PROCESSOR_RESPECT_REDIRECTS
+        ):
+            new_url = self.job.response.url
+            new_url_parsed = urllib.parse.urlparse(new_url)
+            if new_url_parsed.netloc != self.job.netloc:
+                self.logger.warning(f"Redirecting to another network location: {new_url}")
+                self.logger.debug("The redirected target location will become a new job.")
+                self.descendants.append(self.job.copy(new_url_parsed))
+                self.job.delayed = True
+                return False
+
+            self.logger.debug(f"Respecting redirect to {new_url}...")
+            self.job.remote_path = new_url
+            self.job.remote_url = new_url_parsed
 
         # Determine the content type of the response
         for header in self.job.response.headers:
