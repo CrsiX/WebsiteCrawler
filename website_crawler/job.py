@@ -400,8 +400,9 @@ class JobManager:
 
         with self._lock:
             if self._full:
-                self._reserved.remove(item)
-            else:
+                if item in self._reserved:
+                    self._reserved.remove(item)
+            elif item.remote_path in self._reserved:
                 self._reserved.remove(item.remote_path)
             if isinstance(item, DownloadJob):
                 if self._full:
