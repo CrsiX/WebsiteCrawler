@@ -55,6 +55,32 @@ def convert_to_ascii_only(
     )
 
 
+def remove_dot_segments(path: str) -> str:
+    """
+    Remove the dot segments of a given path
+
+    The implementation of this method was inspired
+    by RFC 3986, section 5.2.4, but uses another,
+    much easier and yet probably equivalent algorithm.
+
+    :param path: any path that may contain dot segments
+    :return: path without dot segments
+    """
+
+    out = []
+
+    for segment in path.split("/"):
+        if segment == "" or segment == ".":
+            pass
+        elif segment == "..":
+            if len(out) > 0:
+                out.pop()
+        else:
+            out.append(segment)
+
+    return "/" + "/".join(out)
+
+
 def find_absolute_reference(
         target: str,
         domain: str,
@@ -91,14 +117,6 @@ def find_absolute_reference(
         if a.netloc != "" and a.path == "":
             return b
         return "/".join(a.path.split("/")[:-1]) + b
-
-    def remove_dot_segments(p: str) -> str:
-        """
-        Remove the dot segments of a path `p`
-        """
-
-        # TODO: implement feature
-        return p
 
     url = urllib.parse.urlparse(target)
     scheme, netloc, path, params, query, fragment = url
