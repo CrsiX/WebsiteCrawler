@@ -194,8 +194,10 @@ class MultiThreadedDownloader(_BaseDownloader):
         do_status_updates.acquire()
 
         def handle_status():
+            step = 0
             while not do_status_updates.acquire(timeout=status[0]):
-                status[1](self.get_status())
+                status[1](f"step={step},{self.get_status()}")
+                step += 1
             do_status_updates.release()
 
         update_thread = None

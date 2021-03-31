@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
 import sys
-import time
 import logging
 import argparse
-import threading
 import urllib.parse
 
 import website_crawler
-
-
-_MAIN_SLEEP_TIME = 0.01
 
 
 def setup() -> argparse.ArgumentParser:
