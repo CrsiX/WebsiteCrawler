@@ -310,7 +310,7 @@ class JobManager:
     _queue: JobQueue
     _storage: typing.Dict[str, typing.Union[int, DownloadJob]]
     _reserved: typing.List[typing.Union[str, DownloadJob]]
-    _successful: typing.List[int]
+    _successful: typing.Iterable[int]
 
     def __init__(
             self,
