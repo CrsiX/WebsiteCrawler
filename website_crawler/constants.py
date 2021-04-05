@@ -2,7 +2,17 @@
 Various constant values used in the project
 """
 
+from enum import Enum as _Enum, auto as _auto
 from typing import Tuple as _Tuple
+
+
+class RunnerState(_Enum):
+    CREATED = _auto()  # the runner has just been created
+    WORKING = _auto()  # the runner processes jobs
+    WAITING = _auto()  # the runner waits for new jobs to be available
+    ENDING = _auto()   # the runner processes its last job
+    EXITED = _auto()   # the runner exited gracefully
+    CRASHED = _auto()  # the runner crashed due to unhandled exception
 
 
 DEFAULT_ACCEPTED_RESPONSE_CODES: _Tuple[int] = (200,)

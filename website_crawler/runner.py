@@ -5,18 +5,9 @@ Runners triggering parallel job executions using processors
 import queue
 import typing
 import logging
-from enum import Enum, auto as _auto
 
 from . import processor as _processor, job as _job
-
-
-class RunnerState(Enum):
-    CREATED = _auto()  # the runner has just been created
-    WORKING = _auto()  # the runner processes jobs
-    WAITING = _auto()  # the runner waits for new jobs to be available
-    ENDING = _auto()   # the runner processes its last job
-    EXITED = _auto()   # the runner exited gracefully
-    CRASHED = _auto()  # the runner crashed due to unhandled exception
+from .constants import RunnerState
 
 
 class Runner:
