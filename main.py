@@ -2,234 +2,49 @@
 
 import sys
 import logging
-import argparse
-import urllib.parse
 
-import website_crawler
+from website_crawler import cli, options
+from website_crawler.downloader import DefaultDownloader
 
 
-def setup() -> argparse.ArgumentParser:
+def main(opts: options.Options, handler_classes=None):
     """
-    Setup the command-line interface
+    Run the main program with logging and status already set up
 
-    :return: argument parser
+    :param opts: Options storage
+    :param handler_classes: optional list of custom handler classes
+        as directly passed to the ``DefaultDownloader`` constructor
     """
-
-    def location(arg: str) -> str:
-        """
-        Ensure that a given argument is a valid URL for the downloader
-
-        :param arg: argument as given by the user
-        :return: the same, unmodified string
-        :raises ValueError: in case the string seems to be invalid
-        """
-
-        parsed_value = urllib.parse.urlparse(arg)
-        if parsed_value.netloc == "" or parsed_value.scheme == "":
-            raise ValueError
-        if parsed_value.scheme not in ("http", "https"):
-            raise ValueError
-        return arg
-
-    parser = argparse.ArgumentParser(
-        description="WebsiteCrawler: a deep website cloning tool"
-    )
-
-    parser.add_argument(
-        "website",
-        help="website root URL, typically the domain name",
-        type=location
-    )
-
-    parser.add_argument(
-        "target",
-        help="target base directory to store website files"
-    )
-
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        help="print verbose information",
-        dest="verbose",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--ascii",
-        help="use ASCII chars for link and file names only",
-        dest="ascii_only",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--base",
-        help="set or remove the `base` tag (if existing)",
-        dest="base_ref",
-        metavar="ref",
-        type=location,
-        default=None
-    )
-
-    parser.add_argument(
-        "--crash",
-        help="exit runner threads on exit (continue otherwise)",
-        dest="crash_on_error",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--css",
-        help="specify download of CSS content",
-        dest="css_download",
-        action="store_true"
-    )
-
-    https_mode = parser.add_mutually_exclusive_group()
-    https_mode.add_argument(
-        "--http",
-        help="try enforcing HTTP mode on all connections",
-        dest="http_only",
-        action="store_true"
-    )
-    https_mode.add_argument(
-        "--https",
-        help="try enforcing HTTPS mode on all connections",
-        dest="https_only",
-        action="store_true"
-    )
-    https_mode.add_argument(
-        "--https-first",
-        help="try HTTPS mode first, then fall back to HTTP on errors",
-        dest="https_only",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--image",
-        help="specify download of content in image tags",
-        dest="image_download",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--javascript",
-        help="specify download of JavaScript content",
-        dest="javascript_download",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--logfile",
-        help="path to the logfile",
-        dest="logfile",
-        metavar="file"
-    )
-
-    parser.add_argument(
-        "--lowered",
-        help="convert all path names to lowercase",
-        dest="lowered",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--no-explore",
-        help="deny further exploration using `a` tags and references",
-        dest="explore",
-        action="store_false"
-    )
-
-    parser.add_argument(
-        "--no-overwrite",
-        help="do not overwrite any existing files",
-        dest="overwrite",
-        action="store_false"
-    )
-
-    parser.add_argument(
-        "--prettify",
-        help="prettify resulting HTML files to improve readability",
-        dest="prettify",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--rewrite",
-        help="rewrite references to other downloaded content",
-        dest="rewrite",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--status",
-        help="print current status messages to stderr every n seconds",
-        dest="status",
-        metavar="n",
-        type=float,
-        default=0
-    )
-
-    parser.add_argument(
-        "--third-party",
-        help="also download third party resources (CSS, JS, images only)",
-        dest="third_party",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--threads",
-        help="number of parallel download streams",
-        dest="threads",
-        default=4,
-        metavar="n",
-        type=int
-    )
-
-    parser.add_argument(
-        "--unique",
-        help="use unique file names (improves third party usage)",
-        dest="unique_filenames",
-        action="store_true"
-    )
-
-    parser.add_argument(
-        "--user-agent",
-        help="custom user agent string for the HTTP(S) requests",
-        dest="user_agent",
-        metavar="x",
-        default=None
-    )
-
-    return parser
-
-
-def main(namespace: argparse.Namespace):
-    level = logging.INFO
-    if "verbose" in namespace and namespace.verbose:
-        level = logging.DEBUG
 
     logging_setup = {
-        "level": level,
+        "level": logging.DEBUG if opts.verbose else logging.INFO,
         "format": "{asctime} [{levelname}] {name}: {message}",
         "datefmt": "%d.%m.%Y %H:%M:%S",
         "style": "{"
     }
 
-    if "logfile" in namespace and namespace.logfile:
-        logging_setup["filename"] = namespace.logfile
+    if opts.logfile:
+        logging_setup["filename"] = opts.logfile
     logging.basicConfig(**logging_setup)
 
     logger = logging.getLogger("crawler")
     status = None
-    if namespace.status > 0:
-        status = (namespace.status, lambda *args: print(*args, file=sys.stderr))
+    if opts.status_updates:
+        status = (opts.status_updates, lambda *args: print(*args, file=sys.stderr))
 
-    loader = website_crawler.construct_from_namespace(namespace, logger)
+    loader = DefaultDownloader(
+        websites=opts.websites,
+        target_directory=opts.target_directory,
+        logger=logger,
+        options=opts,
+        manager_debug_mode=False,
+        handler_classes=handler_classes
+    )
     loader.run(
-        namespace.threads,
+        opts.threads,
         status
     )
 
 
 if __name__ == "__main__":
-    main(setup().parse_args())
+    main(options.Options(**cli.setup_cli().parse_args().__dict__))
