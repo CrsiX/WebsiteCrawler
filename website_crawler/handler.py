@@ -95,7 +95,7 @@ class HTMLContentHandler(BaseContentHandler):
          *  ``load_javascript``
          *  ``load_stylesheets``
          *  ``lowered_paths``
-         *  ``prettify``
+         *  ``pretty_html``
          *  ``rewrite_references``
 
         :param job: the download job that should be handled and analyzed
@@ -208,7 +208,7 @@ class HTMLContentHandler(BaseContentHandler):
             handle_tag("img", "src", lambda x: True)
 
         # Determine the final content, based on the specified options
-        if options.get("prettify", _constants.DEFAULT_HTML_OUTPUT_PRETTIFIED):
+        if options.get("pretty_html", _constants.DEFAULT_PRETTY_HTML):
             return soup.prettify()
         if options.get("rewrite_references", _constants.DEFAULT_REWRITE_REFERENCES):
             return soup.decode()

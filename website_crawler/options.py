@@ -51,7 +51,7 @@ class Options(Namespace):
     def __getitem__(self, item: str):
         if item in self:
             return super().__getitem__(item)
-        elif hasattr(_constants, f"DEFAULT_{item.upper()}"):
+        elif isinstance(item, str) and hasattr(_constants, f"DEFAULT_{item.upper()}"):
             return getattr(_constants, f"DEFAULT_{item.upper()}")
         else:
             raise KeyError(item)
