@@ -77,9 +77,10 @@ def setup_cli() -> argparse.ArgumentParser:
     mandatory_group = parser.add_argument_group("mandatory arguments")
 
     mandatory_group.add_argument(
-        "website",
+        "websites",
         help="website root URL, usually the domain name with http(s)://",
-        type=location
+        type=location,
+        nargs="+"
     )
 
     mandatory_group.add_argument(
@@ -235,7 +236,7 @@ def setup_cli() -> argparse.ArgumentParser:
         help="use this custom user agent string for the HTTP(S) requests",
         dest="user_agent",
         metavar="UA",
-        default=None
+        default=constants.DEFAULT_USER_AGENT
     )
 
     processor_group = parser.add_argument_group("processing arguments")
@@ -258,7 +259,7 @@ def setup_cli() -> argparse.ArgumentParser:
     processor_group.add_argument(
         "--status",
         help="print current status messages to stderr every N seconds",
-        dest="status",
+        dest="status_updates",
         metavar="N",
         type=float,
         default=0

@@ -3,8 +3,7 @@
 import sys
 import logging
 
-from website_crawler import cli, options
-from website_crawler.downloader import DefaultDownloader
+from website_crawler import cli, options, downloader
 
 
 def main(opts: options.Options, handler_classes=None):
@@ -32,7 +31,11 @@ def main(opts: options.Options, handler_classes=None):
     if opts.status_updates:
         status = (opts.status_updates, lambda *args: print(*args, file=sys.stderr))
 
-    loader = DefaultDownloader(
+    loader_class = downloader.MultiThreadedDownloader
+    if opts.threads == 1:
+        loader_class = downloader.SingleThreadedDownloader
+
+    loader = loader_class(
         websites=opts.websites,
         target_directory=opts.target_directory,
         logger=logger,
@@ -41,8 +44,8 @@ def main(opts: options.Options, handler_classes=None):
         handler_classes=handler_classes
     )
     loader.run(
-        opts.threads,
-        status
+        threads=opts.threads,
+        status=status
     )
 
 
