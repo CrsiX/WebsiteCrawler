@@ -78,7 +78,7 @@ def setup_cli() -> argparse.ArgumentParser:
 
     mandatory_group.add_argument(
         "website",
-        help="website root URL, typically the domain name with http(s)://",
+        help="website root URL, usually the domain name with http(s)://",
         type=location
     )
 
@@ -289,6 +289,15 @@ def setup_cli() -> argparse.ArgumentParser:
         help="print verbose information",
         dest="verbose",
         action="store_true"
+    )
+
+    misc_group.add_argument(
+        "-V",
+        "--version",
+        help="show version information and exit",
+        action="version",
+        version=constants.VERSION_STRING,
+        default=argparse.SUPPRESS
     )
 
     return parser

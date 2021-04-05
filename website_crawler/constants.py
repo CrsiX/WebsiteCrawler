@@ -6,6 +6,10 @@ from enum import Enum as _Enum, auto as _auto
 from typing import Tuple as _Tuple
 
 
+VERSION = (0, 1, 0)  # scheme: major, minor, release
+VERSION_STRING = f"v{'.'.join(map(str, VERSION))}"
+
+
 class RunnerState(_Enum):
     CREATED = _auto()  # the runner has just been created
     WORKING = _auto()  # the runner processes jobs
@@ -33,7 +37,7 @@ DEFAULT_COMPRESSED_HTML: bool = False
 
 DEFAULT_DOWNLOADER_THREAD_COUNT: int = 4
 
-DEFAULT_HTTPS_MODE: int = 3
+DEFAULT_HTTPS_MODE: HTTPSMode = HTTPSMode.DEFAULT
 
 DEFAULT_INCLUDE_FONTS: bool = False
 DEFAULT_INCLUDE_HYPERLINKS: bool = True
@@ -48,11 +52,13 @@ DEFAULT_LOWERED_PATHS: bool = False
 
 DEFAULT_MENTION_OVERWRITING_FILES: bool = True
 
+DEFAULT_PRETTY_CSS: bool = False
 DEFAULT_PRETTY_HTML: bool = False
-
-DEFAULT_PROCESSOR_RESPECT_REDIRECTS: bool = True
+DEFAULT_PRETTY_JAVASCRIPT: bool = False
 
 DEFAULT_QUEUE_ACCESS_TIMEOUT: float = 0.1
+
+DEFAULT_RESPECT_REDIRECTS: bool = True
 
 DEFAULT_REWRITE_REFERENCES: bool = True
 
