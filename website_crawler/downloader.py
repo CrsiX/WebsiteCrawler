@@ -9,8 +9,9 @@ import threading
 import urllib.parse
 
 from .job import DownloadJob, JobManager
-from .runner import Runner, RunnerState
-from .handler import ALL_DEFAULT_HANDLER_CLASSES
+from .runner import Runner
+from .handler import ALL_DEFAULT_HANDLER_CLASSES, BaseContentHandler
+from .options import Options
 from .constants import *
 
 
@@ -19,44 +20,35 @@ from .constants import *
 # and a constructor for the derived classes below.
 class _BaseDownloader:
     """
-    :param website: base URI of the website which should be downloaded
+    :param websites: list of URIs which should be downloaded and processed
     :param target_directory: target directory where to store downloaded files
     :param logger: logger used to keep track of various events
-    :param crash_on_error: worker threads will crash when they encounter unexpected
-        problems (otherwise, they would send the traceback to stdout and continue)
-    :param queue_access_timeout: timeout to access the queue in seconds (higher
-        values potentially decrease load but may also negatively affect speed)
     :param manager_debug_mode: whether to store the full download job in the
         history or just the HTTP response code (heavily increased memory usage)
+    :param handler_classes: list of handler classes that should be used to
+        analyze the content of the delivered files, depending on its MIME type
+        (the default ``ALL_DEFAULT_HANDLER_CLASSES`` will be used for ``None``)
     """
 
     jobs: JobManager
     logger: logging.Logger
-    website: str
-
-    _options: typing.Dict[str, typing.Any]
-    _crash_on_error: bool
-    _queue_access_timeout: float
+    options: Options
 
     def __init__(
             self,
-            website: str,
+            websites: typing.List[typing.Union[str, urllib.parse.ParseResult]],
             target_directory: str,
             logger: logging.Logger,
-            crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
-            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT,
+            options: Options,
             manager_debug_mode: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
-            **kwargs
+            handler_classes: typing.List[typing.Type[BaseContentHandler]] = None
     ):
-        self.website = website
         self.logger = logger
+        self.options = options
+        self.jobs = JobManager(manager_debug_mode)
 
-        self._options = kwargs
-        self._crash_on_error = crash_on_error
-        self._queue_access_timeout = queue_access_timeout
-
-        if urllib.parse.urlparse(self.website).netloc == "":
-            self.logger.error("Empty network location! Further operation might fail.")
+        if handler_classes is None:
+            handler_classes = ALL_DEFAULT_HANDLER_CLASSES
 
         if not os.path.exists(target_directory):
             os.makedirs(target_directory, exist_ok=True)
@@ -65,13 +57,28 @@ class _BaseDownloader:
             self.logger.critical("Target directory is no directory!")
             raise RuntimeError("Target directory is no directory!")
 
-        self.jobs = JobManager(manager_debug_mode)
-        self.jobs.put(DownloadJob(
-            website,
-            target_directory,
-            logging.getLogger("first-job"),  # should be overwritten by runner
-            ALL_DEFAULT_HANDLER_CLASSES
-        ))
+        for website in websites:
+            if isinstance(website, str) and urllib.parse.urlparse(website).netloc == "":
+                self.logger.error(
+                    f"Empty network location for '{website}'! "
+                    f"Further operation might fail."
+                )
+
+            self.jobs.put(DownloadJob(
+                website,
+                target_directory,
+                logging.getLogger("first-jobs"),  # should be overwritten by runner
+                handler_classes,
+                self.options
+            ))
+
+        self._init()
+
+    # A subclass may implement this method to do initialization
+    # stuff after the 'default' part has already been done.
+    # This avoids to override __init__ in most cases.
+    def _init(self):
+        pass
 
     # A subclass should implement this method, depending on
     # the exact handling of the runner(s) used by the class.
@@ -106,10 +113,10 @@ class SingleThreadedDownloader(_BaseDownloader):
         runner = Runner(
             self.jobs,
             logging.getLogger("runner"),
-            self._queue_access_timeout,
-            self._crash_on_error,
+            self.options.queue_access_timeout,
+            self.options.crash_on_error,
             True,
-            self._options
+            self.options
         )
         self.logger.debug("Starting runner...")
         runner.run()
@@ -135,25 +142,10 @@ class MultiThreadedDownloader(_BaseDownloader):
     _runners: typing.Dict[int, typing.Tuple[Runner, threading.Thread]]
     _runners_ident: typing.Generator
 
-    def __init__(
-            self,
-            website: str,
-            target_directory: str,
-            logger: logging.Logger,
-            crash_on_error: bool = DEFAULT_RUNNER_CRASH_ON_ERROR,
-            queue_access_timeout: float = DEFAULT_QUEUE_ACCESS_TIMEOUT,
-            manager_debug_mode: bool = DEFAULT_JOB_MANAGER_FULL_MODE,
-            **kwargs
-    ):
-        super().__init__(
-            website,
-            target_directory,
-            logger,
-            crash_on_error,
-            queue_access_timeout,
-            manager_debug_mode,
-            **kwargs
-        )
+    def _init(self):
+        """
+        Perform post-initialization stuff
+        """
 
         def _ident():
             n = 0
@@ -249,10 +241,10 @@ class MultiThreadedDownloader(_BaseDownloader):
         runner = Runner(
             self.jobs,
             logging.getLogger(f"runner{ident}"),
-            self._queue_access_timeout,
-            self._crash_on_error,
+            self.options.queue_access_timeout,
+            self.options.crash_on_error,
             False,
-            self._options
+            self.options
         )
 
         thread = threading.Thread(target=runner.run, daemon=False)

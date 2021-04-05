@@ -14,10 +14,10 @@ import urllib.parse
 import requests
 
 from .handler import BaseContentHandler as _BaseContentHandler
+from .options import Options as _Options
 from .constants import (
     DEFAULT_ACCEPTED_RESPONSE_CODES,
-    DEFAULT_JOB_MANAGER_FULL_MODE,
-    DEFAULT_USER_AGENT_STRING
+    DEFAULT_JOB_MANAGER_FULL_MODE
 )
 
 
@@ -43,12 +43,6 @@ class DownloadJob:
         "local_base",
         "local_path",
         "final_content",
-        "https_mode",
-        "user_agent",
-        "prettify",
-        "allow_rewrites",
-        "allow_overwrites",
-        "mention_overwrites",
         "started",
         "delayed",
         "analyzed",
@@ -56,6 +50,7 @@ class DownloadJob:
         "overwritten",
         "finished",
         "logger",
+        "options",
         "exception"
     )
 
@@ -89,20 +84,6 @@ class DownloadJob:
     final_content: typing.Union[bytes, str, None]
     """Final version of the content as stored in the target file, if available"""
 
-    # Various options that change the behavior of the processing unit(s)
-    https_mode: int
-    """Mode affecting the use of HTTPS, see the description in the Downloader class"""
-    user_agent: str
-    """User-agent string as sent in the HTTP header to query the remote side"""
-    prettify: bool
-    """Determine whether to 'prettify' the resulting output (HTML data only)"""
-    allow_rewrites: bool
-    """Allow rewriting of references to other downloaded files (HTML data only)"""
-    allow_overwrites: bool
-    """Allow overwriting existing local files without further asking"""
-    mention_overwrites: bool
-    """Determine whether to mention overwriting files using log level INFO"""
-
     # Various status flags (may become 'True' in roughly this order)
     started: bool
     """Info whether the processing of the URL has been started"""
@@ -120,6 +101,8 @@ class DownloadJob:
     # Generic common stuff
     logger: logging.Logger
     """Logger which will be used for logging"""
+    options: typing.Union[typing.Dict[str, typing.Any], _Options]
+    """Storage of options for processors, handlers and other parts"""
     exception: typing.Optional[Exception]
     """Exception that occurred during the handling of the job, if available"""
 
@@ -129,6 +112,7 @@ class DownloadJob:
             local_base: str,
             logger: logging.Logger,
             handler: typing.List[typing.Type[_BaseContentHandler]],
+            options: typing.Dict[str, typing.Any],
             **kwargs
     ):
 
@@ -160,13 +144,6 @@ class DownloadJob:
         self.local_path = None
         self.final_content = None
 
-        self.https_mode = 0
-        self.user_agent = DEFAULT_USER_AGENT_STRING
-        self.prettify = False
-        self.allow_rewrites = True
-        self.allow_overwrites = True
-        self.mention_overwrites = False
-
         self.started = False
         self.delayed = False
         self.analyzed = False
@@ -175,6 +152,7 @@ class DownloadJob:
         self.finished = False
 
         self.logger = logger
+        self.options = options
         self.exception = None
 
         for k, v in kwargs.items():
@@ -207,7 +185,8 @@ class DownloadJob:
             remote,
             self.local_base,
             self.logger,
-            self.handler.copy()
+            self.handler.copy(),
+            self.options
         )
 
 
