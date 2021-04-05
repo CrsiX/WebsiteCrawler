@@ -15,12 +15,21 @@ class RunnerState(_Enum):
     CRASHED = _auto()  # the runner crashed due to unhandled exception
 
 
+class HTTPSMode(_Enum):
+    DEFAULT = _auto()      # do not care about HTTP or HTTPS
+    HTTP_ONLY = _auto()    # try enforcing HTTP
+    HTTPS_ONLY = _auto()   # try enforcing HTTPS
+    HTTPS_FIRST = _auto()  # try HTTPS first, then fall back to HTTP on errors
+
+
 DEFAULT_ACCEPTED_RESPONSE_CODES: _Tuple[int] = (200,)
 
 DEFAULT_ALLOW_OVERWRITING_FILES: bool = True
 
 DEFAULT_ASCII_ONLY_REFERENCES: bool = False
 DEFAULT_ASCII_REPLACEMENT_CHAR: str = "_"
+
+DEFAULT_COMPRESSED_HTML: bool = False
 
 DEFAULT_DOWNLOADER_THREAD_COUNT: int = 4
 
