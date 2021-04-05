@@ -85,7 +85,7 @@ def find_absolute_reference(
         target: str,
         domain: str,
         remote_url: urllib.parse.ParseResult,
-        https_mode: int = _constants.DEFAULT_HTTPS_MODE,
+        https_mode: _constants.HTTPSMode = _constants.DEFAULT_HTTPS_MODE,
         base: typing.Optional[urllib.parse.ParseResult] = None
 ) -> typing.Optional[str]:
     """
@@ -130,11 +130,11 @@ def find_absolute_reference(
     if scheme != "" and scheme.lower() not in ("http", "https"):
         return
     elif scheme == "":
-        if https_mode == 0:
+        if https_mode == _constants.HTTPSMode.DEFAULT:
             scheme = remote_url.scheme
-        elif https_mode == 1 or https_mode == 3:
+        elif https_mode in (_constants.HTTPSMode.HTTPS_ONLY, _constants.HTTPSMode.HTTPS_FIRST):
             scheme = "https"
-        elif https_mode == 2:
+        elif https_mode == _constants.HTTPSMode.HTTP_ONLY:
             scheme = "http"
     elif netloc != "" and netloc.lower() == domain.lower():
         return urllib.parse.urlunparse(

@@ -36,8 +36,8 @@ class Options(Namespace):
     It's recommended to use this class whenever a function,
     method or class requires an argument ``options``. One could
     easily give a normal dictionary with the required attributes
-    already set. But this class avoids KeyErrors by looking up
-    the default value for missing keys automatically.
+    already set. But this class tries to avoid KeyErrors by
+    looking up the default value for missing keys automatically.
     """
 
     def __repr__(self):
