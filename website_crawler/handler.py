@@ -158,7 +158,7 @@ class HTMLContentHandler(BaseContentHandler):
                         tag.get(attr_name),
                         job.netloc,
                         job.remote_url,
-                        job.https_mode,
+                        job.options.https_mode,
                         base
                     )
 

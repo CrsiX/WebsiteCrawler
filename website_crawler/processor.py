@@ -43,7 +43,7 @@ class BaseProcessor:
             target,
             self.job.netloc,
             self.job.remote_url,
-            self.job.https_mode,
+            self.job.options.https_mode,
             base
         )
 
@@ -64,7 +64,7 @@ class BaseProcessor:
         # Ensure no existing files are overwritten if not allowed
         overwritten = False
         if os.path.exists(self.job.local_path):
-            if not self.job.allow_overwrites:
+            if not self.job.options.allow_overwrites:
                 self.logger.info(
                     f"File '{self.job.local_path}' already exists, "
                     f"it will not be overwritten."
@@ -72,7 +72,7 @@ class BaseProcessor:
                 self.job.written = False
                 self.job.finished = True
                 return True
-            if self.job.mention_overwrites:
+            if self.job.options.mention_overwrites:
                 self.logger.info(f"Overwriting '{self.job.local_path}'.")
             overwritten = True
 
@@ -109,7 +109,7 @@ class DownloadProcessor(BaseProcessor):
 
     Supported keys in the `options` dictionary:
      *  ``ascii_only``
-     *  ``lowered``
+     *  ``lowered_paths``
      *  ``respect_redirects``
 
     :param job: description of a single download job (will also be
@@ -149,7 +149,7 @@ class DownloadProcessor(BaseProcessor):
         try:
             self.job.response = requests.get(
                 self.job.remote_path,
-                headers={"User-Agent": self.job.user_agent}
+                headers={"User-Agent": self.job.options.user_agent}
             )
 
         # Catch SSL errors and eventually try to fetch the resource via HTTP again
@@ -180,7 +180,7 @@ class DownloadProcessor(BaseProcessor):
         # Adopt the new remote URL if there were some redirects
         if len(self.job.response.history) > 0 and self.options.get(
                 "respect_redirects",
-                _constants.DEFAULT_PROCESSOR_RESPECT_REDIRECTS
+                _constants.DEFAULT_RESPECT_REDIRECTS
         ):
             new_url = self.job.response.url
             new_url_parsed = urllib.parse.urlparse(new_url)

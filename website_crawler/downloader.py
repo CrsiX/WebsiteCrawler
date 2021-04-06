@@ -153,8 +153,8 @@ class MultiThreadedDownloader(_BaseDownloader):
                 yield n
                 n += 1
 
-        self._runners: typing.Dict[int, typing.Tuple[Runner, threading.Thread]] = {}
-        self._runner_ident: typing.Generator = _ident()
+        self._runners = {}
+        self._runner_ident = _ident()
 
     def run(
             self,
