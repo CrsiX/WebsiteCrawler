@@ -34,6 +34,11 @@ def main(opts: options.Options, handler_classes=None):
     loader_class = downloader.MultiThreadedDownloader
     if opts.threads == 1:
         loader_class = downloader.SingleThreadedDownloader
+        if opts.status_updates:
+            logger.warning(
+                "Status updates are currently not "
+                "supported in single-threaded mode!"
+            )
 
     loader = loader_class(
         websites=opts.websites,
