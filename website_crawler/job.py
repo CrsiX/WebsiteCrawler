@@ -59,7 +59,7 @@ class DownloadJob:
     """Remote absolute path (URL) to the file that should be downloaded"""
     remote_url: urllib.parse.ParseResult
     """URL that should be requested from the server, analyzed and stored"""
-    netloc: typing.Final[str]
+    netloc: str
     """Remote network location name used to restrict queries to the 'first' party"""
 
     # Information about the response from the remote web server
@@ -198,9 +198,6 @@ class JobQueue(queue.Queue):
     the default queue (its superclass) is the type of
     objects that should be managed by an instance of it.
     """
-
-    def __init__(self, maxsize: int = 0):
-        super().__init__(maxsize)
 
     def get(self, block: bool = True, timeout: float = None) -> DownloadJob:
         """
