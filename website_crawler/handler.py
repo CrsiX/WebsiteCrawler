@@ -7,7 +7,7 @@ import urllib.parse
 
 import bs4
 
-from . import helper as _helper, constants as _constants
+from . import helper as _helper
 
 
 class BaseContentHandler:
@@ -16,12 +16,13 @@ class BaseContentHandler:
 
     A subclass should implement the ``analyze`` class method which
     is dedicated to actually handle the server's response.
-    This method should accept two arguments, one being the download
-    job itself while the other is a dictionary of options. Those
-    options can be used to tweak the handlers behavior. However, an
-    implementation may not assume certain keys to be present and
-    should always provide reasonable default values for missing keys.
-    An actual implementation should document supported keys of course.
+    This method should only accept one argument, the download
+    job itself. That ``DownloadJob`` object should have an attribute
+    ``options`` which can be accessed like a mapping or a namespace.
+    An implementation should document which attributes are required
+    by it, but it should not assume that certain keys are present.
+    The default classes have properly set defaults, though. Therefore,
+    a subclass must provide reasonable default values for missing keys.
     The return value of that method should provide the complete and
     final content as it should be stored in the target file on disk.
     Note that the handler should not set the ``final_content`` attribute.
@@ -44,7 +45,7 @@ class BaseContentHandler:
         )
 
     @classmethod
-    def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
+    def analyze(cls, job) -> typing.AnyStr:
         raise NotImplementedError
 
     @classmethod
@@ -66,7 +67,7 @@ class _DummyContentHandler(BaseContentHandler):
     """
 
     @classmethod
-    def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
+    def analyze(cls, job) -> typing.AnyStr:
         cls._check_type(job)
         job.logger.debug(f"{cls.__name__} doesn't implement analyze yet...")
         return job.response.text
@@ -84,11 +85,11 @@ class HTMLContentHandler(BaseContentHandler):
     MIME_TYPE = ["text/html"]
 
     @classmethod
-    def analyze(cls, job, options: dict) -> typing.Union[str, bytes]:
+    def analyze(cls, job) -> typing.AnyStr:
         """
         Analyze and edit the job's content, extracting potential new targets
 
-        Supported keys in the ``options`` dictionary:
+        Supported keys in the ``options`` storage:
          *  ``ascii_only``
          *  ``load_hyperlinks``
          *  ``load_images``
@@ -99,8 +100,6 @@ class HTMLContentHandler(BaseContentHandler):
          *  ``rewrite_references``
 
         :param job: the download job that should be handled and analyzed
-        :param options: dictionary of additional options that alter the
-            handling of the job in various different ways
         :return: the content of the file that should be written to disk
         """
 
@@ -116,12 +115,12 @@ class HTMLContentHandler(BaseContentHandler):
             """
 
             path = urllib.parse.urlparse(ref).path
-            if options.get("ascii_only", _constants.DEFAULT_ASCII_ONLY_REFERENCES):
+            if job.options.ascii_only:
                 path = _helper.convert_to_ascii_only(
                     path,
                     _helper.SMALL_ASCII_CONVERSION_TABLE
                 )
-            if options.get("lowered_paths", _constants.DEFAULT_LOWERED_PATHS):
+            if job.options.lowered_paths:
                 path = path.lower()
             if path.startswith("/"):
                 path = path[1:]
@@ -197,20 +196,20 @@ class HTMLContentHandler(BaseContentHandler):
             soup.base.replace_with("")
 
         # Handle the various types of references, if enabled
-        if options.get("load_hyperlinks", _constants.DEFAULT_INCLUDE_HYPERLINKS):
+        if job.options.load_hyperlinks:
             handle_tag("a", "href", lambda x: True)
-        if options.get("load_stylesheets", _constants.DEFAULT_INCLUDE_STYLESHEETS):
+        if job.options.load_stylesheets:
             # TODO: add support for icons and scripts added by `link` tags
             handle_tag("link", "href", stylesheet_filter_func)
-        if options.get("load_javascript", _constants.DEFAULT_INCLUDE_JAVASCRIPT):
+        if job.options.load_javascript:
             handle_tag("script", "src", lambda x: True)
-        if options.get("load_images", _constants.DEFAULT_INCLUDE_IMAGES):
+        if job.options.load_images:
             handle_tag("img", "src", lambda x: True)
 
         # Determine the final content, based on the specified options
-        if options.get("pretty_html", _constants.DEFAULT_PRETTY_HTML):
+        if job.options.pretty_html:
             return soup.prettify()
-        if options.get("rewrite_references", _constants.DEFAULT_REWRITE_REFERENCES):
+        if job.options.rewrite_references:
             return soup.decode()
         return job.response.text
 
