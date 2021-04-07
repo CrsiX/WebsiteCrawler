@@ -30,6 +30,15 @@ DEFAULT_ACCEPTED_RESPONSE_CODES: _typing.Tuple[int] = (200,)
 
 DEFAULT_ALLOW_OVERWRITING_FILES: bool = True
 
+DEFAULT_ASCII_CONVERSION_TABLE: _typing.Dict[str, str] = {
+    "ä": "ae",
+    "Ä": "Ae",
+    "ö": "oe",
+    "Ö": "Oe",
+    "ü": "ue",
+    "Ü": "Ue",
+    "ß": "ss"
+}
 DEFAULT_ASCII_ONLY_REFERENCES: bool = False
 DEFAULT_ASCII_REPLACEMENT_CHAR: str = "_"
 

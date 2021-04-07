@@ -225,7 +225,10 @@ class DownloadProcessor(BaseProcessor):
         # Determine the filename under which the content should be stored
         path = self.job.remote_url.path
         if self.job.options.ascii_only:
-            path = _helper.convert_to_ascii_only(path, _helper.SMALL_ASCII_CONVERSION_TABLE)
+            path = _helper.convert_to_ascii_only(
+                path,
+                self.job.options.ascii_conversion_table
+            )
         if self.job.options.lowered_paths:
             path = path.lower()
         if path.startswith("/"):

@@ -6,17 +6,6 @@ import urllib.parse
 from . import constants as _constants
 
 
-SMALL_ASCII_CONVERSION_TABLE = {
-    "ä": "ae",
-    "Ä": "Ae",
-    "ö": "oe",
-    "Ö": "Oe",
-    "ü": "ue",
-    "Ü": "Ue",
-    "ß": "ss"
-}
-
-
 def convert_to_ascii_only(
         string: str,
         mapping: dict = None,
