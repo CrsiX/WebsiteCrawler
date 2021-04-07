@@ -66,7 +66,7 @@ class Options(Namespace):
         else:
             raise KeyError(item)
 
-    def copy(self):
+    def copy(self) -> "Options":
         return Options(super().copy())
 
     def popitem(self, *args, **kwargs):

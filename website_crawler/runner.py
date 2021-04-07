@@ -8,6 +8,7 @@ import logging
 
 from . import (
     job as _job,
+    constants as _constants,
     processor as _processor
 )
 from .constants import RunnerState
@@ -40,7 +41,7 @@ class Runner:
             job_manager: _job.JobManager,
             logger: logging.Logger,
             queue_access_timeout: float,
-            crash_on_error: bool = False,
+            crash_on_error: bool = _constants.DEFAULT_RUNNER_CRASH_ON_ERROR,
             quit_on_empty_queue: bool = False
     ):
         self.job_manager = job_manager

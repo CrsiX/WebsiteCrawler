@@ -115,8 +115,7 @@ class SingleThreadedDownloader(_BaseDownloader):
             logging.getLogger("runner"),
             self.options.queue_access_timeout,
             self.options.crash_on_error,
-            True,
-            self.options
+            True
         )
         self.logger.debug("Starting runner...")
         runner.run()
@@ -243,8 +242,7 @@ class MultiThreadedDownloader(_BaseDownloader):
             logging.getLogger(f"runner{ident}"),
             self.options.queue_access_timeout,
             self.options.crash_on_error,
-            False,
-            self.options
+            False
         )
 
         thread = threading.Thread(target=runner.run, daemon=False)

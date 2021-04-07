@@ -12,7 +12,11 @@ import urllib.parse
 
 import requests
 
-from . import constants as _constants, helper as _helper, job as _job
+from . import (
+    job as _job,
+    helper as _helper,
+    constants as _constants
+)
 
 
 class BaseProcessor:
@@ -102,33 +106,26 @@ class DownloadProcessor(BaseProcessor):
     Worker class performing the actual work of processing a download job
 
     This 'processing' involves downloading the content from the remote
-    server, analyzing it (in case of HTML data only) to retrieve other
+    server, analyzing it using one suitable handler class to retrieve other
     locations on the remote side that should be accessed, storing the
     downloaded data at some specific location on the local system
     and of course keeping track of all steps that have been done.
 
-    Supported keys in the `options` dictionary:
+    Supported keys in the ``options`` storage:
      *  ``ascii_only``
      *  ``lowered_paths``
      *  ``respect_redirects``
 
     :param job: description of a single download job (will also be
         accessed in read-write manner to store various flags and data)
-    :param options: dictionary of various options that will be given
-        to a job's handler class to tweak its behavior but might also
-        be used by the processor in the one way or the other (note that
-        none of those classes should rely on any value to be present)
     """
 
-    options: dict
-    """Various options used to alter the job's processing and analyze"""
     descendants: typing.List[_job.DownloadJob]
     """List of follow-up jobs in case of errors, if available"""
 
-    def __init__(self, job: _job.DownloadJob, options: dict):
+    def __init__(self, job: _job.DownloadJob):
         self.job = job
         self.logger = job.logger
-        self.options = options
         self.descendants = []
 
     def run(self) -> bool:
@@ -136,8 +133,8 @@ class DownloadProcessor(BaseProcessor):
         Perform the actual work as a blocking process
 
         :return: True if all operations completed successfully, False otherwise
-            (the job's attribute `exception` might hold more details about the
-            error; the processor's attribute `descendants` might hold follow-up
+            (the job's attribute ``exception`` might hold more details about the
+            error; the processor's attribute ``descendants`` might hold follow-up
             jobs that could be used instead to fix this error, if possible)
         """
 
@@ -156,7 +153,8 @@ class DownloadProcessor(BaseProcessor):
         except requests.exceptions.SSLError as exc:
             self.job.exception = exc
             msg = f"SSL Error: {exc} (while fetching {self.job})"
-            if self.job.https_mode == 3 and self.job.remote_url.scheme == "https":
+            if self.job.options.https_mode == _constants.HTTPSMode.HTTPS_FIRST \
+                    and self.job.remote_url.scheme == "https":
                 self.descendants.append(
                     self.job.copy(self.job.remote_url._replace(scheme="http"))
                 )
@@ -178,10 +176,7 @@ class DownloadProcessor(BaseProcessor):
             return False
 
         # Adopt the new remote URL if there were some redirects
-        if len(self.job.response.history) > 0 and self.options.get(
-                "respect_redirects",
-                _constants.DEFAULT_RESPECT_REDIRECTS
-        ):
+        if len(self.job.response.history) > 0 and self.job.options.respect_redirects:
             new_url = self.job.response.url
             new_url_parsed = urllib.parse.urlparse(new_url)
             if new_url_parsed.netloc != self.job.netloc:
@@ -207,7 +202,7 @@ class DownloadProcessor(BaseProcessor):
         for handler_class in self.job.handler:
             if handler_class.accepts(self.job.response_type):
                 self.logger.debug(f"Using {handler_class} to analyze {self.job}")
-                content = handler_class.analyze(self.job, self.options)
+                content = handler_class.analyze(self.job)
                 break
         else:
             self.logger.warning(f"No handler class found for {self.job}")
@@ -229,9 +224,9 @@ class DownloadProcessor(BaseProcessor):
 
         # Determine the filename under which the content should be stored
         path = self.job.remote_url.path
-        if self.options.get("ascii_only", False):
+        if self.job.options.ascii_only:
             path = _helper.convert_to_ascii_only(path, _helper.SMALL_ASCII_CONVERSION_TABLE)
-        if self.options.get("lowered", False):
+        if self.job.options.lowered_paths:
             path = path.lower()
         if path.startswith("/"):
             path = path[1:]

@@ -59,7 +59,7 @@ class DownloadJob:
     """Remote absolute path (URL) to the file that should be downloaded"""
     remote_url: urllib.parse.ParseResult
     """URL that should be requested from the server, analyzed and stored"""
-    netloc: str
+    netloc: typing.Final[str]
     """Remote network location name used to restrict queries to the 'first' party"""
 
     # Information about the response from the remote web server
