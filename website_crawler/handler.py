@@ -118,7 +118,7 @@ class HTMLContentHandler(BaseContentHandler):
             if job.options.ascii_only:
                 path = _helper.convert_to_ascii_only(
                     path,
-                    _helper.SMALL_ASCII_CONVERSION_TABLE
+                    job.options.ascii_conversion_table
                 )
             if job.options.lowered_paths:
                 path = path.lower()
@@ -196,14 +196,14 @@ class HTMLContentHandler(BaseContentHandler):
             soup.base.replace_with("")
 
         # Handle the various types of references, if enabled
-        if job.options.load_hyperlinks:
+        if job.options.include_hyperlinks:
             handle_tag("a", "href", lambda x: True)
-        if job.options.load_stylesheets:
+        if job.options.include_stylesheets:
             # TODO: add support for icons and scripts added by `link` tags
             handle_tag("link", "href", stylesheet_filter_func)
-        if job.options.load_javascript:
+        if job.options.include_javascript:
             handle_tag("script", "src", lambda x: True)
-        if job.options.load_images:
+        if job.options.include_images:
             handle_tag("img", "src", lambda x: True)
 
         # Determine the final content, based on the specified options
