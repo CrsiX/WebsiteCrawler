@@ -6,7 +6,10 @@ import queue
 import typing
 import logging
 
-from . import processor as _processor, job as _job
+from . import (
+    job as _job,
+    processor as _processor
+)
 from .constants import RunnerState
 
 
@@ -32,17 +35,13 @@ class Runner:
     state: RunnerState
     """Current state of the runner"""
 
-    options: dict
-    """Dictionary of keyword arguments supplied to processors and handlers"""
-
     def __init__(
             self,
             job_manager: _job.JobManager,
             logger: logging.Logger,
             queue_access_timeout: float,
             crash_on_error: bool = False,
-            quit_on_empty_queue: bool = False,
-            options: dict = None
+            quit_on_empty_queue: bool = False
     ):
         self.job_manager = job_manager
         self.logger = logger
@@ -52,10 +51,6 @@ class Runner:
 
         self.exception = None
         self.state = RunnerState.CREATED
-
-        self.options = options
-        if options is None:
-            self.options = {}
 
     def run(self):
         """
@@ -79,7 +74,7 @@ class Runner:
             current_job.logger = self.logger
 
             try:
-                worker = _processor.DownloadProcessor(current_job, self.options)
+                worker = _processor.DownloadProcessor(current_job)
                 if worker.run():
                     self.logger.debug(f"Worker processed {current_job} successfully.")
                 else:
